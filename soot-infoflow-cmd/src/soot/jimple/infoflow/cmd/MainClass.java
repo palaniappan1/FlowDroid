@@ -1,26 +1,30 @@
 package soot.jimple.infoflow.cmd;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import com.opencsv.CSVWriter;
+import config.CallGraphAlgorithm;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import soot.Modifier;
-import soot.Scene;
-import soot.SootClass;
 import soot.jimple.infoflow.InfoflowConfiguration.AliasingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.CallbackSourceMode;
 import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
@@ -36,10 +40,8 @@ import soot.jimple.infoflow.android.InfoflowAndroidConfiguration;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration.CallbackAnalyzer;
 import soot.jimple.infoflow.android.SetupApplication;
 import soot.jimple.infoflow.android.config.XMLConfigurationParser;
-import soot.jimple.infoflow.handlers.PreAnalysisHandler;
-import soot.jimple.infoflow.methodSummary.data.provider.IMethodSummaryProvider;
+import soot.jimple.infoflow.android.util.*;
 import soot.jimple.infoflow.methodSummary.data.provider.LazySummaryProvider;
-import soot.jimple.infoflow.methodSummary.data.summary.ClassMethodSummaries;
 import soot.jimple.infoflow.methodSummary.taintWrappers.ReportMissingSummaryWrapper;
 import soot.jimple.infoflow.methodSummary.taintWrappers.SummaryTaintWrapper;
 import soot.jimple.infoflow.methodSummary.taintWrappers.TaintWrapperFactory;
@@ -64,6 +66,14 @@ public class MainClass {
 	protected ReportMissingSummaryWrapper reportMissingSummaryWrapper;
 
 	protected Set<String> filesToSkip = new HashSet<>();
+
+	protected static final List<AppAnalysisResult> appAnalysisResultList = new ArrayList<>();
+
+	protected static AppAnalysisResult appAnalysisResult;
+
+	protected static JSONArray outerJsonArray = new JSONArray();
+
+	protected static CallGraphMetrics callGraphMetrics;
 
 	// Files
 	private static final String OPTION_CONFIG_FILE = "c";
@@ -258,8 +268,160 @@ public class MainClass {
 	}
 
 	public static void main(String[] args) throws Exception {
-		MainClass main = new MainClass();
-		main.run(args);
+		String folderPath = "DroidBench/apk/Callbacks";
+
+		// Create a File object representing the folder
+		File folder = new File(folderPath);
+
+		// Check if the folder exists and is a directory
+		if (folder.exists() && folder.isDirectory()) {
+			// List all files and directories in the folder
+			File[] files = folder.listFiles();
+			if (files != null) {
+				for (File file : files) {
+					if (file.isFile()) {
+						// Print the file name and path
+						StringBuilder stringBuilder = new StringBuilder();
+						stringBuilder.append("-a\n");
+						stringBuilder.append(file.getAbsolutePath() + "\n");
+						stringBuilder.append("-p\n");
+						stringBuilder.append("/Users/palaniappanmuthuraman/Library/Android/sdk/platforms\n");
+						stringBuilder.append("-s\n");
+						stringBuilder.append("/Users/palaniappanmuthuraman/Documents/FlowDroid/soot-infoflow-android/SourcesAndSinks.txt\n");
+						stringBuilder.append("-d\n");
+						CallgraphAlgorithm oldCallGraphAlgorithm = null;
+						appAnalysisResult = AppAnalysisResult.getInstance();
+						for(CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()){
+							Metrics metrics = Metrics.getInstance();
+							callGraphMetrics = CallGraphMetrics.getInstance();
+							if(callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection) || callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand)){
+								continue;
+							}
+							if(oldCallGraphAlgorithm == null) {
+								stringBuilder.append("-cg\n");
+								stringBuilder.append(callgraphAlgorithm + "\n");
+							}
+							else{
+								int lastIndex = stringBuilder.lastIndexOf(oldCallGraphAlgorithm.toString());
+								stringBuilder.delete(lastIndex, stringBuilder.length());
+								stringBuilder.append(callgraphAlgorithm + "\n");
+							}
+							AnalysisMetrics analysisMetrics = AnalysisMetrics.getInstance();
+							System.out.println(stringBuilder);
+							MainClass main = new MainClass();
+							StopWatch stopWatch = StopWatch.newAndStart("Analysis Time");
+							MemoryWatcher memoryWatcher = new MemoryWatcher("Analysis Memory");
+							memoryWatcher.start();
+							main.run(stringBuilder.toString().split("\n"));
+							stopWatch.stop();
+							memoryWatcher.stop();
+							analysisMetrics.setAnalysisTime(stopWatch.elapsed());
+							analysisMetrics.setMemoryConsumed(memoryWatcher.inMegaByte());
+							oldCallGraphAlgorithm = callgraphAlgorithm;
+							metrics.setCallGraphMetrics(callGraphMetrics);
+							metrics.setAnalysisMetrics(analysisMetrics);
+							appAnalysisResult.setMetrics(callGraphMetrics.getCallGraphConstructionMetrics().get(0).getCallGraphAlgorithm().toString(), metrics);
+						}
+					}
+					createJsonObject();
+				}
+				writeToJsonFile();
+				writeToCSVFile();
+			}
+		} else {
+			System.err.println("Invalid folder path or folder does not exist.");
+		}
+	}
+
+	private static void writeToJsonFile() {
+		FileWriter fileWriter;
+		try {
+			fileWriter = new FileWriter("/Users/palaniappanmuthuraman/Documents/FlowDroid/sootOutput/appAnalysis.json");
+			fileWriter.write(outerJsonArray.toString(4));
+			fileWriter.flush();
+			fileWriter.close();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static void writeToCSVFile(){
+		ObjectMapper objectMapper = new ObjectMapper();
+		try {
+			JsonNode jsonNode = objectMapper.readTree(new File("/Users/palaniappanmuthuraman/Documents/FlowDroid/sootOutput/appAnalysis.json"));
+			String csvFilePath = "/Users/palaniappanmuthuraman/Documents/FlowDroid/sootOutput/appAnalysis.csv";
+			List<Map<String, Object>> records = new ArrayList<>();
+			for (JsonNode entry : jsonNode) {
+				String appName = entry.get("app_name").asText();
+				JsonNode metrics = entry.get("metrics");
+				for (JsonNode metric : metrics) {
+					String cgName = metric.fieldNames().next(); // Get the CG name
+
+					JsonNode cgMetrics = metric.get(cgName).get("cg_metric");
+					JsonNode analysisMetric = metric.get(cgName).get("analysis_metric");
+
+					for (JsonNode cgMetric : cgMetrics) {
+						Map record = new HashMap();
+						record.put("cg_construction_time", cgMetric.get("construction_time"));
+						record.put("cg_memory_consumed", cgMetric.get("memory_consumed"));
+						record.put("cg_edges", cgMetric.get("cg_edges"));
+						record.put("app_name", appName);
+						record.put("cg_name", cgName);
+						record.put("analysis_time", analysisMetric.get("analysis_time").asDouble());
+						record.put("analysis_memory", analysisMetric.get("analysis_memory").asDouble());
+						records.add(record);
+					}
+				}
+			}
+			CsvSchema.Builder csvSchemaBuilder = CsvSchema.builder()
+					.addColumn("app_name")
+					.addColumn("cg_name")
+					.addColumn("cg_edges")
+					.addColumn("cg_construction_time")
+					.addColumn("cg_memory_consumed")
+					.addColumn("analysis_time")
+					.addColumn("analysis_memory");
+			CsvSchema csvSchema = csvSchemaBuilder.build().withHeader();
+			CsvMapper csvMapper = new CsvMapper();
+			csvMapper.writerFor(Map.class)
+					.with(csvSchema)
+					.writeValues(new File(csvFilePath))
+					.writeAll(records);
+		} catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+	private static void createJsonObject() {
+		JSONObject outerJsonObject = new JSONObject();
+		JSONObject analysis_metric = new JSONObject();
+		outerJsonObject.put("app_name", appAnalysisResult.getAPP_NAME());
+		JSONArray jsonObjectArray = new JSONArray();
+		appAnalysisResult.getMetrics().forEach(stringMetricsHashMap -> {
+			JSONObject jsonObject = new JSONObject();
+			final CallGraphAlgorithm[] callGraphAlgorithm = {CallGraphAlgorithm.CHA};
+			JSONArray cg_construction_metric_array = new JSONArray();
+			stringMetricsHashMap.values().forEach(value -> {
+				value.getCallGraphMetrics().getCallGraphConstructionMetrics().forEach(callGraphConstructionMetrics -> {
+					JSONObject cg_construction_metric = new JSONObject();
+					callGraphAlgorithm[0] = callGraphConstructionMetrics.getCallGraphAlgorithm();
+					cg_construction_metric.put("cg_edges", callGraphConstructionMetrics.getCg_Edges());
+					cg_construction_metric.put("construction_time", callGraphConstructionMetrics.getConstructionTime());
+					cg_construction_metric.put("memory_consumed", callGraphConstructionMetrics.getMemoryConsumed());
+					cg_construction_metric_array.put(cg_construction_metric);
+				});
+				analysis_metric.put("analysis_time", value.getAnalysisMetrics().getAnalysisTime());
+				analysis_metric.put("analysis_memory", value.getAnalysisMetrics().getMemoryConsumed());
+				JSONObject jsonObject1 = new JSONObject();
+				jsonObject1.put("cg_metric", cg_construction_metric_array);
+				jsonObject1.put("analysis_metric", analysis_metric);
+				assert callGraphAlgorithm[0] != null;
+                jsonObject.put(callGraphAlgorithm[0].toString(), jsonObject1);
+				jsonObjectArray.put(jsonObject);
+			});
+		});
+		outerJsonObject.put("metrics",jsonObjectArray);
+		outerJsonArray.put(outerJsonObject);
 	}
 
 	protected void run(String[] args) throws Exception {
@@ -361,7 +523,7 @@ public class MainClass {
 				analyzer.setTaintWrapper(taintWrapper);
 
 				// Start the data flow analysis
-				analyzer.runInfoflow();
+				analyzer.runInfoflow(callGraphMetrics);
 
 				if (reportMissingSummaryWrapper != null) {
 					String file = cmd.getOptionValue(OPTION_MISSING_SUMMARIES_FILE);
@@ -703,8 +865,11 @@ public class MainClass {
 		// Files
 		{
 			String apkFile = cmd.getOptionValue(OPTION_APK_FILE);
-			if (apkFile != null && !apkFile.isEmpty())
+			if (apkFile != null && !apkFile.isEmpty()) {
 				config.getAnalysisFileConfig().setTargetAPKFile(apkFile);
+				String[] parts = apkFile.split("/");
+				appAnalysisResult.setAPP_NAME(parts[parts.length - 1]);
+			}
 		}
 		{
 			String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);

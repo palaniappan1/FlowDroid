@@ -19,7 +19,19 @@
 			<id>Eclipse</id>
 			<url>https://ssebuild.sit.fraunhofer.de/nexus/repository/maven-mixed/</url>
 		</repository>
+<!--		<repository>-->
+<!--			<id>central</id>-->
+<!--			<url>https://maven.pkg.github.com/QilinPTA/Qilin</url>-->
+<!--			<releases><enabled>true</enabled></releases>-->
+<!--			<snapshots><enabled>true</enabled></snapshots>-->
+<!--		</repository>-->
 	</repositories>
+
+<!--	<properties>-->
+<!--		&lt;!&ndash; Define your credentials here &ndash;&gt;-->
+<!--		<github.username>palaniappan1</github.username>-->
+<!--		<github.token>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</github.token>-->
+<!--	</properties>-->
 	
 	<build>
 		<finalName>soot-infoflow-android-classes</finalName>
@@ -144,6 +156,26 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>org.json</groupId>
+			<artifactId>json</artifactId>
+			<version>20230227</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.15.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-csv</artifactId>
+			<version>2.15.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.opencsv</groupId>
+			<artifactId>opencsv</artifactId>
+			<version>5.8</version>
+		</dependency>
+		<dependency>
 			<groupId>org.hamcrest</groupId>
 			<artifactId>hamcrest</artifactId>
 			<version>${hamcrest.version}</version>
@@ -163,6 +195,17 @@
 		    <groupId>com.esotericsoftware</groupId>
 		    <artifactId>kryo</artifactId>
 		    <version>5.4.0</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/com.github.oshi/oshi-core -->
+		<dependency>
+			<groupId>com.github.oshi</groupId>
+			<artifactId>oshi-core</artifactId>
+			<version>6.4.6</version>
+		</dependency>
+		<dependency>
+			<groupId>com.example.pal</groupId>
+			<artifactId>callgraph</artifactId>
+			<version>1.0-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 </project>
