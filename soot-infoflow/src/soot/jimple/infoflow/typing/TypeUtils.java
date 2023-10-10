@@ -31,9 +31,11 @@ import soot.jimple.infoflow.data.AccessPath;
 public class TypeUtils {
 
 	private final InfoflowManager manager;
+	private final Scene scene;
 
 	public TypeUtils(InfoflowManager manager) {
 		this.manager = manager;
+		this.scene = Scene.v();
 	}
 
 	/**
@@ -146,9 +148,13 @@ public class TypeUtils {
 
 		// The next field's base type must also be cast-compatible to the new
 		// base type
-		if (accessPath.isFieldRef() && fragmentCount > fieldStartIdx)
+		if (accessPath.isFieldRef() && fragmentCount > fieldStartIdx) {
+			// Unpack any array type first
+			if (type instanceof ArrayType)
+				type = ((ArrayType) type).getElementType();
 			if (!checkCast(type, accessPath.getFragments()[fieldStartIdx].getField().getDeclaringClass().getType()))
 				return false;
+		}
 
 		// No type problems found
 		return true;
@@ -186,7 +192,7 @@ public class TypeUtils {
 	 * @return The more precise one of the two given types
 	 */
 	public Type getMorePreciseType(Type tp1, Type tp2) {
-		final FastHierarchy fastHierarchy = Scene.v().getOrMakeFastHierarchy();
+		final FastHierarchy fastHierarchy = scene.getOrMakeFastHierarchy();
 
 		if (tp1 == null)
 			return tp2;
