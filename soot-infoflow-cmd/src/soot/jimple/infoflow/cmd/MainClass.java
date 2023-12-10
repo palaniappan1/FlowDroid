@@ -310,7 +310,7 @@ public class MainClass {
 			stringBuilder.append("-qilin_pta\n");
 			stringBuilder.append(qilinPTA);
 		}
-		System.out.println(callgraphAlgorithm + "\n");
+		System.out.println(qilinPTA.isEmpty() ? callgraphAlgorithm : qilinPTA + "\n");
 		return stringBuilder;
 	}
 
@@ -439,28 +439,29 @@ public class MainClass {
 				EvaluationConfig.setCurrentlyProcessingApkName(file.getName().replace(".apk", ""));
 				if (file.isFile()) {
 					appAnalysisResult = AppAnalysisResult.getInstance();
-					for (CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()) {
-						if (callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection)
-								|| callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand)) {
-							continue;
-						}
-						int i = 1;
-						while(i <= 5){
-							System.out.println("Iteration " + i);
+					int i = 1;
+					while(i <= 5){
+						for (CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()) {
+							if (callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection)
+									|| callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand)) {
+								continue;
+							}
+							System.out.println("Iteration " + i + " " + callgraphAlgorithm);
 							Metrics metrics = Metrics.getInstance();
 							callGraphMetrics = CallGraphMetrics.getInstance();
 							if (callgraphAlgorithm.equals(CallgraphAlgorithm.QILIN)) {
 								computeQILINPTAs(file);
-								break;
 							}
-							runAnalysis(constructArgs(file, callgraphAlgorithm, ""), file);
-							outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK));
-							i++;
+							else{
+								runAnalysis(constructArgs(file, callgraphAlgorithm, ""), file);
+								outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK));
+							}
 						}
+						i++;
 					}
 				}
-				dumpMetrics();
-				System.gc();
+//				dumpMetrics();
+//				System.gc();
 			}
 		}
 		catch (Exception exception){

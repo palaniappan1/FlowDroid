@@ -3,7 +3,7 @@ package soot.jimple.infoflow.cmd;
 public class EvaluationConfig {
     private static final String GROUND_TRUTH_DROIDBENCH_FILE = "/Users/palaniappanmuthuraman/Documents/Thesis/taintBench_results_for_38.json";
 
-    private static final String APK_DIRECTORY_PATH = "/Users/palaniappanmuthuraman/Documents/Thesis/Evaluation_TaintBench/backflash";
+    private static final String APK_DIRECTORY_PATH = "/Users/palaniappanmuthuraman/Documents/Thesis/Evaluation_TaintBench/godwon_samp";
 
 
     private static final String JSON_STRING = ".json";
