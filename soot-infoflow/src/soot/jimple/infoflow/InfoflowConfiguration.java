@@ -68,7 +68,18 @@ public class InfoflowConfiguration {
 	 * the data flow tracker
 	 */
 	public static enum CallgraphAlgorithm {
-		AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM, OnDemand
+		AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM, OnDemand, QILIN
+	}
+
+	public enum ConfigurablePTA{ // 15
+//		INSENS, KC, KO, KT, KH, KHT, E_KO, T_KO, Z_KO, Z_KC, Z_KO_CD, KO_CD, S_KC
+//		INSENS, KC, KO, KT, KH, KHT, M_KO, M_KC, E_KO, T_KO, Z_KO, Z_KC, Z_KO_CD, KO_CD, S_KC
+		 kc, ko, kt, kh, kht, M_ko, M_kc, E_ko, T_ko, Z_ko, Z_kc, s_kc //12
+	}
+
+
+	public enum NonConfigurablePTA{ //3
+		insens,B_2o, D_2o, D_2c
 	}
 
 	/**
@@ -1364,6 +1375,8 @@ public class InfoflowConfiguration {
 	private AccessPathConfiguration accessPathConfiguration = new AccessPathConfiguration();
 
 	private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
+
+	private String QILIN_PTA = null;
 	private AliasingAlgorithm aliasingAlgorithm = AliasingAlgorithm.FlowSensitive;
 	private CodeEliminationMode codeEliminationMode = CodeEliminationMode.PropagateConstants;
 	private StaticFieldTrackingMode staticFieldTrackingMode = StaticFieldTrackingMode.ContextFlowSensitive;
@@ -1715,6 +1728,14 @@ public class InfoflowConfiguration {
 	 */
 	public void setCallgraphAlgorithm(CallgraphAlgorithm algorithm) {
 		this.callgraphAlgorithm = algorithm;
+	}
+
+	public void setQILIN_PTA(String QILIN_PTA){
+		this.QILIN_PTA = QILIN_PTA;
+	}
+
+	public String getQILIN_PTA() {
+		return QILIN_PTA;
 	}
 
 	/**

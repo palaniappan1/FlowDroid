@@ -42,7 +42,7 @@ public class AndroidRiverTests extends RiverBaseJUnitTests {
         // The other one is in the DiscardFlow activity and is a ByteArrayOutputStream.
         SetupApplication app = initApplication("testAPKs/ConditionalFlowTest.apk");
         XMLSourceSinkParser parser = XMLSourceSinkParser.fromFile("./build/classes/res/AndroidRiverSourcesAndSinks.xml");
-        InfoflowResults results = app.runInfoflow(parser);
+        InfoflowResults results = app.runInfoflow(parser, "");
         Assert.assertEquals(2, results.size());
 
         // Check that the flow is in the right activity
@@ -67,7 +67,7 @@ public class AndroidRiverTests extends RiverBaseJUnitTests {
         // fw.append(tainted);
         SetupApplication app = initApplication("testAPKs/ExternalFileWithNativeName.apk");
         XMLSourceSinkParser parser = XMLSourceSinkParser.fromFile("./build/classes/res/AndroidRiverSourcesAndSinks.xml");
-        InfoflowResults results = app.runInfoflow(parser);
+        InfoflowResults results = app.runInfoflow(parser, "");
         Assert.assertEquals(1, results.size());
     }
 
@@ -78,7 +78,7 @@ public class AndroidRiverTests extends RiverBaseJUnitTests {
         SetupApplication app = initApplication("testAPKs/PrintWriterTest.apk");
         app.getConfig().setWriteOutputFiles(true);
         XMLSourceSinkParser parser = XMLSourceSinkParser.fromFile("./build/classes/res/AndroidRiverSourcesAndSinks.xml");
-        InfoflowResults results = app.runInfoflow(parser);
+        InfoflowResults results = app.runInfoflow(parser, "");
         Assert.assertEquals(1, results.size());
     }
 
@@ -87,7 +87,7 @@ public class AndroidRiverTests extends RiverBaseJUnitTests {
         // Test flow with getExternalCacheDir wrapped in another File constructor
         SetupApplication app = initApplication("testAPKs/ExternalCacheDirTest.apk");
         XMLSourceSinkParser parser = XMLSourceSinkParser.fromFile("./build/classes/res/AndroidRiverSourcesAndSinks.xml");
-        InfoflowResults results = app.runInfoflow(parser);
+        InfoflowResults results = app.runInfoflow(parser, "");
         Assert.assertEquals(1, results.size());
     }
 

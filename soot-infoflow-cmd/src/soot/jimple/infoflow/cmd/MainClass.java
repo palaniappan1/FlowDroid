@@ -5,14 +5,11 @@ import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
-import com.opencsv.CSVWriter;
 import config.CallGraphAlgorithm;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -25,6 +22,7 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import soot.jimple.infoflow.InfoflowConfiguration;
 import soot.jimple.infoflow.InfoflowConfiguration.AliasingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.CallbackSourceMode;
 import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
@@ -36,6 +34,7 @@ import soot.jimple.infoflow.InfoflowConfiguration.LayoutMatchingMode;
 import soot.jimple.infoflow.InfoflowConfiguration.PathBuildingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.PathReconstructionMode;
 import soot.jimple.infoflow.InfoflowConfiguration.StaticFieldTrackingMode;
+import soot.jimple.infoflow.android.ApkInfo;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration.CallbackAnalyzer;
 import soot.jimple.infoflow.android.SetupApplication;
@@ -50,6 +49,8 @@ import soot.jimple.infoflow.taintWrappers.ITaintPropagationWrapper;
 import soot.jimple.infoflow.taintWrappers.TaintWrapperSet;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
+
+import static soot.jimple.infoflow.cmd.EvaluationConfig.getNumber_of_Iterations;
 
 /**
  * Main class for running FlowDroid from the command-line
@@ -70,6 +71,14 @@ public class MainClass {
 	protected static final List<AppAnalysisResult> appAnalysisResultList = new ArrayList<>();
 
 	protected static AppAnalysisResult appAnalysisResult;
+
+	protected final static ArrayList<String> qilinPTAList = new ArrayList<>();
+
+	protected static StopWatch stopWatch = null;
+
+	protected static MemoryWatcher memoryWatcher = null;
+
+	protected static int ground_truth_for_this_APK = 0;
 
 	protected static JSONArray outerJsonArray = new JSONArray();
 
@@ -92,6 +101,7 @@ public class MainClass {
 
 	// Optional features
 	private static final String OPTION_NO_STATIC_FLOWS = "ns";
+	private static final String QILIN_PTA = "qilin_pta";
 	private static final String OPTION_NO_CALLBACK_ANALYSIS = "nc";
 	private static final String OPTION_NO_EXCEPTIONAL_FLOWS = "ne";
 	private static final String OPTION_NO_TYPE_CHECKING = "nt";
@@ -177,6 +187,7 @@ public class MainClass {
 
 		// Optional features
 		options.addOption(OPTION_NO_STATIC_FLOWS, "nostatic", false, "Do not track static data flows");
+		options.addOption(QILIN_PTA, "qilin_pta", true, "The QILIN_PTA algorithm to be used");
 		options.addOption(OPTION_NO_CALLBACK_ANALYSIS, "nocallbacks", false, "Do not analyze Android callbacks");
 		options.addOption(OPTION_NO_EXCEPTIONAL_FLOWS, "noexceptions", false,
 				"Do not track taints across exceptional control flow edges");
@@ -267,162 +278,198 @@ public class MainClass {
 		options.addOption(OPTION_CALLGRAPH_ONLY, "callgraphonly", false, "Only compute the callgraph and terminate");
 	}
 
-	public static void main(String[] args) throws Exception {
-		String folderPath = "DroidBench/apk/Callbacks";
+	public void stopLogger(){
 
-		// Create a File object representing the folder
-		File folder = new File(folderPath);
+	}
 
-		// Check if the folder exists and is a directory
-		if (folder.exists() && folder.isDirectory()) {
-			// List all files and directories in the folder
-			File[] files = folder.listFiles();
+	public static void getQilinPTAConfigs(int k){
+		int numberOfIterations = getNumber_of_Iterations();
+		int i =1;
+		while(i <= numberOfIterations){
+			for(int j =1; j <= k; j++) {
+				int finalI = j;
+				Arrays.stream(InfoflowConfiguration.ConfigurablePTA.values()).map(Enum::toString).forEach(value -> qilinPTAList.add(value.replace("k", String.valueOf(finalI)).replace("_", "-")));
+			}
+			Arrays.stream(InfoflowConfiguration.NonConfigurablePTA.values()).map(Enum::toString).forEach(value -> qilinPTAList.add(value.replace("_", "-")));
+			i++;
+		}
+	}
+
+	public static StringBuilder constructArgs(File file, CallgraphAlgorithm callgraphAlgorithm, String qilinPTA){
+		StringBuilder stringBuilder = new StringBuilder();
+		stringBuilder.append("-a\n");
+		stringBuilder.append(file.getAbsolutePath()).append("\n");
+		stringBuilder.append("-p\n");
+		stringBuilder.append("/Users/palaniappanmuthuraman/Library/Android/sdk/platforms\n");
+		stringBuilder.append("-s\n");
+		stringBuilder.append("/Users/palaniappanmuthuraman/Documents/FlowDroid/soot-infoflow-android/SourcesAndSinks.txt\n");
+		stringBuilder.append("-d\n");
+		stringBuilder.append("-cg\n");
+		stringBuilder.append(callgraphAlgorithm).append("\n");
+		if(!qilinPTA.isEmpty()){
+			stringBuilder.append("-qilin_pta\n");
+			stringBuilder.append(qilinPTA);
+		}
+		System.out.println(callgraphAlgorithm + "\n");
+		return stringBuilder;
+	}
+
+	public static void startMetrics(){
+		stopWatch = StopWatch.newAndStart("Analysis Time");
+		memoryWatcher = new MemoryWatcher("Analysis Memory");
+		memoryWatcher.start();
+	}
+
+	public static void stopMetrics(){
+		stopWatch.stop();
+		memoryWatcher.stop();
+	}
+
+	public static void computeQILINPTAs(File file){
+		qilinPTAList.forEach(qilinPTA -> {
+			StringBuilder stringBuilder = constructArgs(file, CallgraphAlgorithm.QILIN, qilinPTA);
+			try {
+				callGraphMetrics = CallGraphMetrics.getInstance();
+				runAnalysis(stringBuilder, file);
+				outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK));
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		});
+	}
+
+	public static void runAnalysis(StringBuilder stringBuilder, File file) throws Exception {
+		appAnalysisResult = AppAnalysisResult.getInstance();
+		MainClass main = new MainClass();
+		startMetrics();
+		main.run(stringBuilder.toString().split("\n"));
+		stopMetrics();
+		setMetrics(appAnalysisResult, file);
+	}
+
+	public static void setMetrics(AppAnalysisResult appAnalysisResult, File file){
+		if(!callGraphMetrics.getCallGraphConstructionMetrics().isEmpty()){
+			AnalysisMetrics analysisMetrics = AnalysisMetrics.getInstance();
+			if(file.getName().equals(ApkInfo.getApkName())) {
+				analysisMetrics.setAnalysisTime(stopWatch.elapsed() + ApkInfo.getInitializeSootTime());
+			}
+			analysisMetrics.setMemoryConsumed(memoryWatcher.inMegaByte());
+			Metrics metrics = Metrics.getInstance();
+			metrics.setCallGraphMetrics(callGraphMetrics);
+			metrics.setAnalysisMetrics(analysisMetrics);
+			appAnalysisResult.setMetrics(callGraphMetrics.getCallGraphConstructionMetrics().get(0).getCallGraphAlgorithm(), metrics);
+		}
+	}
+
+	private static List<File> listDirectories(String directoryPath) {
+		List<File> directories = new ArrayList<>();
+
+		File rootDir = new File(directoryPath);
+
+		// Check if the specified path is a directory
+		if (rootDir.isDirectory()) {
+			// Get a list of all files and directories in the specified path
+			File[] files = rootDir.listFiles();
+
 			if (files != null) {
+				// Loop through each file/directory
 				for (File file : files) {
-					if (file.isFile()) {
-						// Print the file name and path
-						StringBuilder stringBuilder = new StringBuilder();
-						stringBuilder.append("-a\n");
-						stringBuilder.append(file.getAbsolutePath() + "\n");
-						stringBuilder.append("-p\n");
-						stringBuilder.append("/Users/palaniappanmuthuraman/Library/Android/sdk/platforms\n");
-						stringBuilder.append("-s\n");
-						stringBuilder.append("/Users/palaniappanmuthuraman/Documents/FlowDroid/soot-infoflow-android/SourcesAndSinks.txt\n");
-						stringBuilder.append("-d\n");
-						CallgraphAlgorithm oldCallGraphAlgorithm = null;
-						appAnalysisResult = AppAnalysisResult.getInstance();
-						for(CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()){
-							Metrics metrics = Metrics.getInstance();
-							callGraphMetrics = CallGraphMetrics.getInstance();
-							if(callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection) || callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand)){
-								continue;
-							}
-							if(oldCallGraphAlgorithm == null) {
-								stringBuilder.append("-cg\n");
-								stringBuilder.append(callgraphAlgorithm + "\n");
-							}
-							else{
-								int lastIndex = stringBuilder.lastIndexOf(oldCallGraphAlgorithm.toString());
-								stringBuilder.delete(lastIndex, stringBuilder.length());
-								stringBuilder.append(callgraphAlgorithm + "\n");
-							}
-							AnalysisMetrics analysisMetrics = AnalysisMetrics.getInstance();
-							System.out.println(stringBuilder);
-							MainClass main = new MainClass();
-							StopWatch stopWatch = StopWatch.newAndStart("Analysis Time");
-							MemoryWatcher memoryWatcher = new MemoryWatcher("Analysis Memory");
-							memoryWatcher.start();
-							main.run(stringBuilder.toString().split("\n"));
-							stopWatch.stop();
-							memoryWatcher.stop();
-							analysisMetrics.setAnalysisTime(stopWatch.elapsed());
-							analysisMetrics.setMemoryConsumed(memoryWatcher.inMegaByte());
-							oldCallGraphAlgorithm = callgraphAlgorithm;
-							metrics.setCallGraphMetrics(callGraphMetrics);
-							metrics.setAnalysisMetrics(analysisMetrics);
-							appAnalysisResult.setMetrics(callGraphMetrics.getCallGraphConstructionMetrics().get(0).getCallGraphAlgorithm().toString(), metrics);
-						}
+					// Check if it is a directory
+					if (file.isDirectory()) {
+						// Add the directory path to the list
+						directories.add(file);
 					}
-					createJsonObject();
 				}
-				writeToJsonFile();
-				writeToCSVFile();
 			}
 		} else {
-			System.err.println("Invalid folder path or folder does not exist.");
+			System.out.println("Error: The specified path is not a directory.");
 		}
+
+		return directories;
 	}
 
-	private static void writeToJsonFile() {
-		FileWriter fileWriter;
-		try {
-			fileWriter = new FileWriter("/Users/palaniappanmuthuraman/Documents/FlowDroid/sootOutput/appAnalysis.json");
-			fileWriter.write(outerJsonArray.toString(4));
-			fileWriter.flush();
-			fileWriter.close();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
+	private static List<File> listFiles(String directoryPath) {
+		List<File> fileList = new ArrayList<>();
+		listFilesRecursive(directoryPath, fileList);
+		return fileList;
 	}
 
-	private static void writeToCSVFile(){
-		ObjectMapper objectMapper = new ObjectMapper();
-		try {
-			JsonNode jsonNode = objectMapper.readTree(new File("/Users/palaniappanmuthuraman/Documents/FlowDroid/sootOutput/appAnalysis.json"));
-			String csvFilePath = "/Users/palaniappanmuthuraman/Documents/FlowDroid/sootOutput/appAnalysis.csv";
-			List<Map<String, Object>> records = new ArrayList<>();
-			for (JsonNode entry : jsonNode) {
-				String appName = entry.get("app_name").asText();
-				JsonNode metrics = entry.get("metrics");
-				for (JsonNode metric : metrics) {
-					String cgName = metric.fieldNames().next(); // Get the CG name
+	private static void listFilesRecursive(String directoryPath, List<File> filePaths) {
+		File directory = new File(directoryPath);
 
-					JsonNode cgMetrics = metric.get(cgName).get("cg_metric");
-					JsonNode analysisMetric = metric.get(cgName).get("analysis_metric");
-
-					for (JsonNode cgMetric : cgMetrics) {
-						Map record = new HashMap();
-						record.put("cg_construction_time", cgMetric.get("construction_time"));
-						record.put("cg_memory_consumed", cgMetric.get("memory_consumed"));
-						record.put("cg_edges", cgMetric.get("cg_edges"));
-						record.put("app_name", appName);
-						record.put("cg_name", cgName);
-						record.put("analysis_time", analysisMetric.get("analysis_time").asDouble());
-						record.put("analysis_memory", analysisMetric.get("analysis_memory").asDouble());
-						records.add(record);
+		// Check if the provided path is a directory
+		if (directory.isDirectory()) {
+			// List all files in the current directory
+			File[] files = directory.listFiles();
+			if (files != null) {
+				for (File file : files) {
+					if(file.isFile() && file.toString().contains(".apk")) {
+						filePaths.add(file);
+					}
+					// If the current item is a directory, recurse into it
+					if (file.isDirectory()) {
+						listFilesRecursive(file.getAbsolutePath(), filePaths);
 					}
 				}
 			}
-			CsvSchema.Builder csvSchemaBuilder = CsvSchema.builder()
-					.addColumn("app_name")
-					.addColumn("cg_name")
-					.addColumn("cg_edges")
-					.addColumn("cg_construction_time")
-					.addColumn("cg_memory_consumed")
-					.addColumn("analysis_time")
-					.addColumn("analysis_memory");
-			CsvSchema csvSchema = csvSchemaBuilder.build().withHeader();
-			CsvMapper csvMapper = new CsvMapper();
-			csvMapper.writerFor(Map.class)
-					.with(csvSchema)
-					.writeValues(new File(csvFilePath))
-					.writeAll(records);
-		} catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-	private static void createJsonObject() {
-		JSONObject outerJsonObject = new JSONObject();
-		JSONObject analysis_metric = new JSONObject();
-		outerJsonObject.put("app_name", appAnalysisResult.getAPP_NAME());
-		JSONArray jsonObjectArray = new JSONArray();
-		appAnalysisResult.getMetrics().forEach(stringMetricsHashMap -> {
-			JSONObject jsonObject = new JSONObject();
-			final CallGraphAlgorithm[] callGraphAlgorithm = {CallGraphAlgorithm.CHA};
-			JSONArray cg_construction_metric_array = new JSONArray();
-			stringMetricsHashMap.values().forEach(value -> {
-				value.getCallGraphMetrics().getCallGraphConstructionMetrics().forEach(callGraphConstructionMetrics -> {
-					JSONObject cg_construction_metric = new JSONObject();
-					callGraphAlgorithm[0] = callGraphConstructionMetrics.getCallGraphAlgorithm();
-					cg_construction_metric.put("cg_edges", callGraphConstructionMetrics.getCg_Edges());
-					cg_construction_metric.put("construction_time", callGraphConstructionMetrics.getConstructionTime());
-					cg_construction_metric.put("memory_consumed", callGraphConstructionMetrics.getMemoryConsumed());
-					cg_construction_metric_array.put(cg_construction_metric);
-				});
-				analysis_metric.put("analysis_time", value.getAnalysisMetrics().getAnalysisTime());
-				analysis_metric.put("analysis_memory", value.getAnalysisMetrics().getMemoryConsumed());
-				JSONObject jsonObject1 = new JSONObject();
-				jsonObject1.put("cg_metric", cg_construction_metric_array);
-				jsonObject1.put("analysis_metric", analysis_metric);
-				assert callGraphAlgorithm[0] != null;
-                jsonObject.put(callGraphAlgorithm[0].toString(), jsonObject1);
-				jsonObjectArray.put(jsonObject);
-			});
-		});
-		outerJsonObject.put("metrics",jsonObjectArray);
-		outerJsonArray.put(outerJsonObject);
+		}
+		else{
+			filePaths.add(directory);
+		}
 	}
+
+	public static void dumpMetrics(){
+		System.out.println("Writing Evaluation Output ........ of " + EvaluationConfig.getCurrentlyProcessingApkName());
+		Util.writeToJsonFile(outerJsonArray);
+		Util.writeToCSVFile();
+	}
+
+	public static void main(String[] args) {
+
+		// Create a File object representing the folder
+		getQilinPTAConfigs(EvaluationConfig.getK_configuration_for_QILIN());
+
+		// List all files and directories in the folder
+		try{
+			List<File> files = listFiles(EvaluationConfig.getApkDirectoryPath());
+			for (File file : files) {
+//				file = listFiles(file.getPath()).get(0);
+				System.out.println("Started Processing " + file.getName());
+				ground_truth_for_this_APK = Util.getGroundTruthLeaks(file.getName());
+				EvaluationConfig.setCurrentlyProcessingApkName(file.getName().replace(".apk", ""));
+				if (file.isFile()) {
+					appAnalysisResult = AppAnalysisResult.getInstance();
+					for (CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()) {
+						if (callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection)
+								|| callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand)) {
+							continue;
+						}
+						int i = 1;
+						while(i <= 5){
+							System.out.println("Iteration " + i);
+							Metrics metrics = Metrics.getInstance();
+							callGraphMetrics = CallGraphMetrics.getInstance();
+							if (callgraphAlgorithm.equals(CallgraphAlgorithm.QILIN)) {
+								computeQILINPTAs(file);
+								break;
+							}
+							runAnalysis(constructArgs(file, callgraphAlgorithm, ""), file);
+							outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK));
+							i++;
+						}
+					}
+				}
+				dumpMetrics();
+				System.gc();
+			}
+		}
+		catch (Exception exception){
+			exception.printStackTrace();
+		}
+		finally {
+			System.exit(0);
+		}
+    }
 
 	protected void run(String[] args) throws Exception {
 		// We need proper parameters
@@ -523,7 +570,7 @@ public class MainClass {
 				analyzer.setTaintWrapper(taintWrapper);
 
 				// Start the data flow analysis
-				analyzer.runInfoflow(callGraphMetrics);
+				analyzer.runInfoflow(callGraphMetrics, apkFile.getName());
 
 				if (reportMissingSummaryWrapper != null) {
 					String file = cmd.getOptionValue(OPTION_MISSING_SUMMARIES_FILE);
@@ -703,6 +750,8 @@ public class MainClass {
 			return CallgraphAlgorithm.SPARK;
 		else if (algo.equalsIgnoreCase("GEOM"))
 			return CallgraphAlgorithm.GEOM;
+		else if (algo.equalsIgnoreCase("QILIN"))
+			return CallgraphAlgorithm.QILIN;
 		else {
 			System.err.println(String.format("Invalid callgraph algorithm: %s", algo));
 			throw new AbortAnalysisException();
@@ -869,6 +918,11 @@ public class MainClass {
 				config.getAnalysisFileConfig().setTargetAPKFile(apkFile);
 				String[] parts = apkFile.split("/");
 				appAnalysisResult.setAPP_NAME(parts[parts.length - 1]);
+			}
+		}
+		{
+			if(cmd.hasOption(QILIN_PTA)){
+				config.setQILIN_PTA(cmd.getOptionValue(QILIN_PTA));
 			}
 		}
 		{

@@ -9,9 +9,19 @@ public class CallGraphMetrics {
 
     private static CallGraphMetrics instance;
 
+    private static int numberOfLeaks;
+
     public static CallGraphMetrics getInstance(){
         instance = new CallGraphMetrics();
         return instance;
+    }
+
+    public int getNumberOfLeaks() {
+        return numberOfLeaks;
+    }
+
+    public void setNumberOfLeaks(int numberOfLeaks) {
+        CallGraphMetrics.numberOfLeaks = numberOfLeaks;
     }
 
     public void clear(){
