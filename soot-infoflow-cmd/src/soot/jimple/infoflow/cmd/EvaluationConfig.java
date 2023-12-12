@@ -3,16 +3,18 @@ package soot.jimple.infoflow.cmd;
 public class EvaluationConfig {
     private static final String GROUND_TRUTH_DROIDBENCH_FILE = "/Users/palaniappanmuthuraman/Documents/Thesis/taintBench_results_for_38.json";
 
-    private static final String APK_DIRECTORY_PATH = "/Users/palaniappanmuthuraman/Documents/Thesis/Evaluation_TaintBench/godwon_samp";
+    private static final String APK_DIRECTORY_PATH = "/Users/palaniappanmuthuraman/Documents/Thesis/Evaluation_TaintBench/fakeappstore";
 
 
     private static final String JSON_STRING = ".json";
     private static final String CSV_STRING = ".csv";
 
+    private static final String DECOMPOSED = "decomposed";
+
 
     private static String CURRENTLY_PROCESSING_APK_NAME = "";
 
-    private static final int number_of_Iterations = 5;
+    private static final int number_of_Iterations = 2;
 
     private static final int k_configuration_for_QILIN = 2;
 
@@ -35,6 +37,14 @@ public class EvaluationConfig {
 
     public static String getJSON_FILE_PATh() {
         return APK_DIRECTORY_PATH + "/" + CURRENTLY_PROCESSING_APK_NAME + JSON_STRING;
+    }
+
+    public static String getDecomposedJSON_FILE_PATh(){
+        return APK_DIRECTORY_PATH + "/" + CURRENTLY_PROCESSING_APK_NAME + DECOMPOSED + JSON_STRING;
+    }
+
+    public static String getDecomposedCSV_FILE_PATh(){
+        return APK_DIRECTORY_PATH + "/" + CURRENTLY_PROCESSING_APK_NAME + DECOMPOSED + CSV_STRING;
     }
 
     public static String getCurrentlyProcessingApkName() {

@@ -285,14 +285,14 @@ public class MainClass {
 	public static void getQilinPTAConfigs(int k){
 		int numberOfIterations = getNumber_of_Iterations();
 		int i =1;
-		while(i <= numberOfIterations){
+//		while(i <= numberOfIterations){
 			for(int j =1; j <= k; j++) {
 				int finalI = j;
 				Arrays.stream(InfoflowConfiguration.ConfigurablePTA.values()).map(Enum::toString).forEach(value -> qilinPTAList.add(value.replace("k", String.valueOf(finalI)).replace("_", "-")));
 			}
 			Arrays.stream(InfoflowConfiguration.NonConfigurablePTA.values()).map(Enum::toString).forEach(value -> qilinPTAList.add(value.replace("_", "-")));
 			i++;
-		}
+//		}
 	}
 
 	public static StringBuilder constructArgs(File file, CallgraphAlgorithm callgraphAlgorithm, String qilinPTA){
@@ -326,16 +326,19 @@ public class MainClass {
 	}
 
 	public static void computeQILINPTAs(File file){
-		qilinPTAList.forEach(qilinPTA -> {
+		int i = 1;
+		for (String qilinPTA : qilinPTAList) {
 			StringBuilder stringBuilder = constructArgs(file, CallgraphAlgorithm.QILIN, qilinPTA);
 			try {
+				System.out.println("Evaluating " + i + " of " + qilinPTAList.size() + " configurations");
 				callGraphMetrics = CallGraphMetrics.getInstance();
 				runAnalysis(stringBuilder, file);
-				outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK));
+				outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK, 0));
+				i++;
 			} catch (Exception e) {
 				throw new RuntimeException(e);
 			}
-		});
+		}
 	}
 
 	public static void runAnalysis(StringBuilder stringBuilder, File file) throws Exception {
@@ -420,8 +423,11 @@ public class MainClass {
 
 	public static void dumpMetrics(){
 		System.out.println("Writing Evaluation Output ........ of " + EvaluationConfig.getCurrentlyProcessingApkName());
-		Util.writeToJsonFile(outerJsonArray);
+		Util.writeToJsonFile(outerJsonArray, EvaluationConfig.getJSON_FILE_PATh());
 		Util.writeToCSVFile();
+		Util.decomposeJsonFile(ground_truth_for_this_APK);
+		Util.writeToJsonFile(Util.getDecomposedJsonArray(), EvaluationConfig.getDecomposedJSON_FILE_PATh());
+		Util.writeDecomposedJsonToCSVFile();
 	}
 
 	public static void main(String[] args) {
@@ -440,28 +446,29 @@ public class MainClass {
 				if (file.isFile()) {
 					appAnalysisResult = AppAnalysisResult.getInstance();
 					int i = 1;
-					while(i <= 5){
+					while(i <= EvaluationConfig.getNumber_of_Iterations()){
 						for (CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()) {
 							if (callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection)
-									|| callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand)) {
+									|| callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand) || callgraphAlgorithm.equals(CallgraphAlgorithm.GEOM)) {
 								continue;
 							}
 							System.out.println("Iteration " + i + " " + callgraphAlgorithm);
 							Metrics metrics = Metrics.getInstance();
 							callGraphMetrics = CallGraphMetrics.getInstance();
 							if (callgraphAlgorithm.equals(CallgraphAlgorithm.QILIN)) {
-								computeQILINPTAs(file);
+//								computeQILINPTAs(file);
 							}
 							else{
 								runAnalysis(constructArgs(file, callgraphAlgorithm, ""), file);
-								outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK));
+								outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK, i));
+								System.out.println(qilinPTAList.size());
 							}
 						}
 						i++;
 					}
 				}
-//				dumpMetrics();
-//				System.gc();
+				dumpMetrics();
+				System.gc();
 			}
 		}
 		catch (Exception exception){
@@ -544,11 +551,11 @@ public class MainClass {
 			int curAppIdx = 1;
 			for (File apkFile : apksToAnalyze) {
 				if (filesToSkip.contains(apkFile.getName())) {
-					logger.info(String.format("Skipping app %s (%d of %d)...", apkFile.getCanonicalPath(), curAppIdx++,
+					logger.debug(String.format("Skipping app %s (%d of %d)...", apkFile.getCanonicalPath(), curAppIdx++,
 							apksToAnalyze.size()));
 					continue;
 				}
-				logger.info(String.format("Analyzing app %s (%d of %d)...", apkFile.getCanonicalPath(), curAppIdx++,
+				logger.debug(String.format("Analyzing app %s (%d of %d)...", apkFile.getCanonicalPath(), curAppIdx++,
 						apksToAnalyze.size()));
 
 				// Configure the analyzer for the current APK file
