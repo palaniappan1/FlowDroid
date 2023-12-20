@@ -1,16 +1,10 @@
 package soot.jimple.infoflow.cmd;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.*;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvSchema;
-import config.CallGraphAlgorithm;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -18,7 +12,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.json.JSONArray;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +82,11 @@ public class MainClass {
 	private static final String OPTION_APK_FILE = "a";
 	private static final String OPTION_PLATFORMS_DIR = "p";
 	private static final String OPTION_SOURCES_SINKS_FILE = "s";
+
+	private static final String NUMBER_OF_ITERATIONS = "i";
+	private static final String K_CONFIGURATIONS_FOR_QILIN = "k";
+
+	private static final String RESULT_JSON_FILE = "r_j";
 	private static final String OPTION_OUTPUT_FILE = "o";
 	private static final String OPTION_ADDITIONAL_CLASSPATH = "ac";
 	private static final String OPTION_SKIP_APK_FILE = "si";
@@ -166,6 +164,10 @@ public class MainClass {
 	private void initializeCommandLineOptions() {
 		options.addOption("?", "help", false, "Print this help message");
 
+		// For the thesis purpose
+		options.addOption(RESULT_JSON_FILE, "json_result_file", true, "The ground truth result file");
+		options.addOption(NUMBER_OF_ITERATIONS, true, "The number of iterations to run for a given application");
+		options.addOption(K_CONFIGURATIONS_FOR_QILIN, true, "The number of iterations to run for a given application");
 		// Files
 		options.addOption(OPTION_CONFIG_FILE, "configfile", true, "Use the given configuration file");
 		options.addOption(OPTION_APK_FILE, "apkfile", true, "APK file to analyze");
@@ -300,9 +302,9 @@ public class MainClass {
 		stringBuilder.append("-a\n");
 		stringBuilder.append(file.getAbsolutePath()).append("\n");
 		stringBuilder.append("-p\n");
-		stringBuilder.append("/Users/palaniappanmuthuraman/Library/Android/sdk/platforms\n");
+		stringBuilder.append(EvaluationConfig.getPlatform_directory()).append("\n");
 		stringBuilder.append("-s\n");
-		stringBuilder.append("/Users/palaniappanmuthuraman/Documents/FlowDroid/soot-infoflow-android/SourcesAndSinks.txt\n");
+		stringBuilder.append(EvaluationConfig.getSource_sink_file()).append("\n");
 		stringBuilder.append("-d\n");
 		stringBuilder.append("-cg\n");
 		stringBuilder.append(callgraphAlgorithm).append("\n");
@@ -432,6 +434,8 @@ public class MainClass {
 
 	public static void main(String[] args) {
 
+		setEvaluationConfigurations(args);
+
 		// Create a File object representing the folder
 		getQilinPTAConfigs(EvaluationConfig.getK_configuration_for_QILIN());
 
@@ -456,7 +460,7 @@ public class MainClass {
 							Metrics metrics = Metrics.getInstance();
 							callGraphMetrics = CallGraphMetrics.getInstance();
 							if (callgraphAlgorithm.equals(CallgraphAlgorithm.QILIN)) {
-//								computeQILINPTAs(file);
+								computeQILINPTAs(file);
 							}
 							else{
 								runAnalysis(constructArgs(file, callgraphAlgorithm, ""), file);
@@ -467,7 +471,7 @@ public class MainClass {
 						i++;
 					}
 				}
-				dumpMetrics();
+//				dumpMetrics();
 				System.gc();
 			}
 		}
@@ -478,6 +482,37 @@ public class MainClass {
 			System.exit(0);
 		}
     }
+
+	private static void setEvaluationConfigurations(String[] args) {
+		MainClass main = new MainClass();
+		CommandLineParser parser = new DefaultParser();
+		try {
+			CommandLine cmd = parser.parse(main.options, args);
+			String apkDirectory = cmd.getOptionValue(OPTION_APK_FILE);
+			if(apkDirectory != null){
+				EvaluationConfig.set_APK_DIRECTORY_PATH(apkDirectory);
+			}
+			String result_Json_File = cmd.getOptionValue(RESULT_JSON_FILE);
+			if(result_Json_File != null){
+				EvaluationConfig.set_RESULT_JSON_FILE(result_Json_File);
+			}
+			String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);
+			if(platformsDir != null){
+				EvaluationConfig.setPlatform_directory(platformsDir);
+			}
+			String source_sinks = cmd.getOptionValue(OPTION_SOURCES_SINKS_FILE);
+			if(source_sinks != null){
+				EvaluationConfig.setSource_sink_file(source_sinks);
+			}
+			int number_of_iterations = Integer.parseInt(cmd.getOptionValue(NUMBER_OF_ITERATIONS));
+			int k_configurations = Integer.parseInt(cmd.getOptionValue(K_CONFIGURATIONS_FOR_QILIN));
+			EvaluationConfig.setNumber_of_Iterations(number_of_iterations);
+			EvaluationConfig.setK_configuration_for_QILIN(k_configurations);
+		}
+		catch (Exception exception){
+			exception.printStackTrace();
+		}
+	}
 
 	protected void run(String[] args) throws Exception {
 		// We need proper parameters
@@ -935,13 +970,17 @@ public class MainClass {
 		}
 		{
 			String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);
-			if (platformsDir != null && !platformsDir.isEmpty())
+			if (platformsDir != null && !platformsDir.isEmpty()) {
 				config.getAnalysisFileConfig().setAndroidPlatformDir(platformsDir);
+				EvaluationConfig.setPlatform_directory(platformsDir);
+			}
 		}
 		{
 			String sourcesSinks = cmd.getOptionValue(OPTION_SOURCES_SINKS_FILE);
-			if (sourcesSinks != null && !sourcesSinks.isEmpty())
+			if (sourcesSinks != null && !sourcesSinks.isEmpty()) {
 				config.getAnalysisFileConfig().setSourceSinkFile(sourcesSinks);
+				EvaluationConfig.setSource_sink_file(sourcesSinks);
+			}
 		}
 		{
 			String outputFile = cmd.getOptionValue(OPTION_OUTPUT_FILE);

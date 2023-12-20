@@ -256,7 +256,7 @@ public class Util {
 
         // Read JSON file into JsonNode
         try {
-            JsonNode rootNode = objectMapper.readTree(new File(EvaluationConfig.getGroundTruthDroidbenchFile()));
+            JsonNode rootNode = objectMapper.readTree(new File(EvaluationConfig.getGroundTruthFile()));
             if (rootNode.isArray()) {
                 // Iterate over elements in the array
                 for (JsonNode node : rootNode) {
