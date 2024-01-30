@@ -139,6 +139,11 @@
 			<artifactId>slf4j-simple</artifactId>
 			<version>${slf4j.version}</version>
 		</dependency>
+<!--		<dependency>-->
+<!--			<groupId>org.slf4j</groupId>-->
+<!--			<artifactId>slf4j-nop</artifactId>-->
+<!--			<version>1.7.36</version>-->
+<!--		</dependency>-->
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
@@ -206,8 +211,6 @@
 			<groupId>com.example.pal</groupId>
 			<artifactId>callgraph</artifactId>
 			<version>1.1-SNAPSHOT</version>
-			<scope>system</scope>
-			<systemPath>/Users/palaniappanmuthuraman/Documents/FlowDroid/libs/callgraph-1.1-SNAPSHOT.jar</systemPath>
 		</dependency>
 	</dependencies>
 </project>

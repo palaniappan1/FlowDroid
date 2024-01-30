@@ -16,6 +16,7 @@ import java.util.*;
 
 import javax.xml.stream.XMLStreamException;
 
+import application.CallGraphApplication;
 import config.CallGraphAlgorithm;
 import config.CallGraphConfig;
 import metrics.CallGraphMetricsWrapper;
@@ -23,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 import org.xmlpull.v1.XmlPullParserException;
-import driver.CallGraphApplication;
 import heros.solver.Pair;
 import soot.G;
 import soot.Main;
@@ -73,6 +73,7 @@ import soot.jimple.infoflow.android.source.ConfigurationBasedCategoryFilter;
 import soot.jimple.infoflow.android.source.UnsupportedSourceSinkFormatException;
 import soot.jimple.infoflow.android.source.parsers.xml.XMLSourceSinkParser;
 import soot.jimple.infoflow.android.util.CallGraphMetrics;
+import soot.jimple.infoflow.android.util.MemoryWatcher;
 import soot.jimple.infoflow.android.util.StopWatch;
 import soot.jimple.infoflow.cfg.BiDirICFGFactory;
 import soot.jimple.infoflow.cfg.LibraryClassPatcher;
@@ -152,10 +153,6 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 	protected IInPlaceInfoflow infoflow = null;
 
 	protected CallGraphMetrics callGraphMetrics;
-
-	protected static String apk_name = "";
-
-	protected int no_of_cg_construction = 1;
 
 	/**
 	 * Class for aggregating the data flow results obtained through multiple runs of
@@ -633,6 +630,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		// Construct the actual callgraph
 		logger.info("Constructing the callgraph...");
+//		PackManager.v().getPack("cg").apply();
 		CallGraphConfig callGraphConfig = CallGraphConfig.getInstance();
 		CallGraphAlgorithm callGraphAlgorithm = configureCallgraph();
 		callGraphConfig.setCallGraphAlgorithm(callGraphAlgorithm);
@@ -640,9 +638,15 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		if(callGraphAlgorithm == CallGraphAlgorithm.QILIN){
 			callGraphConfig.setQilinPta(config.getQILIN_PTA());
 		}
-		CallGraphMetricsWrapper callGraphMetrics = CallGraphApplication.generateCallGraph(Scene.v(), callGraphConfig);
-		Scene.v().setCallGraph(callGraphMetrics.getCallGraph());
-		this.callGraphMetrics.setCallGraphConstructionMetrics(callGraphMetrics.getCallGraphConstructionMetrics());
+		try {
+			CallGraphMetricsWrapper callGraphMetrics = CallGraphApplication.generateCallGraph(Scene.v(), callGraphConfig);
+			Scene.v().setCallGraph(callGraphMetrics.getCallGraph());
+			this.callGraphMetrics.setCallGraphConstructionMetrics(callGraphMetrics.getCallGraphConstructionMetrics());
+		}
+		catch (Exception exception){
+			exception.printStackTrace();
+			System.exit(1);
+		}
 
 		// ICC instrumentation
 		if (iccInstrumenter != null)
@@ -1233,8 +1237,6 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		// Make sure that we have valid Jimple bodies
 		PackManager.v().getPack("wjpp").apply();
 		stopWatch.stop();
-		ApkInfo.setInitializeSootTime(stopWatch.elapsed());
-		ApkInfo.setApkName(apk_name);
 
 
 		// Patch the callgraph to support additional edges. We do this now,
@@ -1409,7 +1411,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 			// The runInfoflow method can take a null provider as long as we
 			// don't attempt to run a data flow analysis.
-			this.runInfoflow((ISourceSinkDefinitionProvider) null, "");
+			this.runInfoflow((ISourceSinkDefinitionProvider) null);
 		} catch (RuntimeException ex) {
 			logger.error("Could not construct callgraph", ex);
 			throw ex;
@@ -1460,7 +1462,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		};
 
-		return runInfoflow(parser, "");
+		return runInfoflow(parser);
 	}
 
 	/**
@@ -1477,7 +1479,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		if (sourceSinkFile != null && !sourceSinkFile.isEmpty())
 			config.getAnalysisFileConfig().setSourceSinkFile(sourceSinkFile);
 
-		return runInfoflow(CallGraphMetrics.getInstance(), "");
+		return runInfoflow(CallGraphMetrics.getInstance());
 	}
 
 	/**
@@ -1488,7 +1490,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 	 * @throws XmlPullParserException Thrown if the Android manifest file could not
 	 *                                be read.
 	 */
-	public InfoflowResults runInfoflow(CallGraphMetrics callGraphMetrics, String apk_file_name) throws IOException, XmlPullParserException {
+	public InfoflowResults runInfoflow(CallGraphMetrics callGraphMetrics) throws IOException, XmlPullParserException {
 		// If we don't have a source/sink file by now, we cannot run the data
 		// flow analysis
 		this.callGraphMetrics = callGraphMetrics;
@@ -1513,7 +1515,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 			throw new IOException("Could not read XML file", ex);
 		}
 
-		return runInfoflow(parser, apk_file_name);
+		return runInfoflow(parser);
 	}
 
 	/**
@@ -1522,7 +1524,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 	 * @param sourcesAndSinks The sources and sinks of the data flow analysis
 	 * @return The results of the data flow analysis
 	 */
-	public InfoflowResults runInfoflow(ISourceSinkDefinitionProvider sourcesAndSinks, String apk_name) {
+	public InfoflowResults runInfoflow(ISourceSinkDefinitionProvider sourcesAndSinks) {
 		// Reset our object state
 		this.collectedSources = config.getLogSourcesAndSinks() ? new HashSet<Stmt>() : null;
 		this.collectedSinks = config.getLogSourcesAndSinks() ? new HashSet<Stmt>() : null;
@@ -1536,8 +1538,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		}
 
 		// Start a new Soot instance
-		if (config.getSootIntegrationMode() == SootIntegrationMode.CreateNewInstance && !Objects.equals(apk_name, SetupApplication.apk_name)) {
-			SetupApplication.apk_name = apk_name;
+		if (config.getSootIntegrationMode() == SootIntegrationMode.CreateNewInstance) {
 			G.reset();
 			initializeSoot();
 		}
@@ -1644,10 +1645,15 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		{
 			int resCount = resultAggregator.getLastResults() == null ? 0 : resultAggregator.getLastResults().size();
 			this.callGraphMetrics.setNumberOfLeaks(resCount);
-			if (config.getOneComponentAtATime())
+			if (config.getOneComponentAtATime()){
 				logger.info("Found {} leaks for component {}", resCount, entrypoint);
-			else
+				System.out.println("Found " + resCount + " leaks for component " + entrypoint);
+			}
+			else{
 				logger.info("Found {} leaks", resCount);
+				System.out.println("Found " + resCount + " leaks");
+			}
+
 		}
 
 		// Update the performance object with the real data
@@ -1659,6 +1665,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 					lastResults.setPerformanceData(perfData = new InfoflowPerformanceData());
 				perfData.setCallgraphConstructionSeconds((int) callbackDuration);
 				perfData.setTotalRuntimeSeconds((int) Math.round((System.nanoTime() - beforeEntryPoint) / 1E9));
+				EvaluationConfig.setMemory_consumed(perfData.getMaxMemoryConsumption());
 			}
 		}
 

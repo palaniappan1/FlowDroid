@@ -11,11 +11,23 @@ public class MemoryWatcher extends Timer {
     private final long pid;
     private final String name;
     private final long[] maxMemory;
+    private static volatile MemoryWatcher instance;
 
     public MemoryWatcher(String name) {
         this.pid = getProcessId();
         this.name = name;
         this.maxMemory = new long[1];
+    }
+
+    public static MemoryWatcher getInstance(String name) {
+        if (instance == null) {
+            synchronized (MemoryWatcher.class) {
+                if (instance == null) {
+                    instance = new MemoryWatcher(name);
+                }
+            }
+        }
+        return instance;
     }
 
     private static long getProcessId() {
@@ -46,6 +58,13 @@ public class MemoryWatcher extends Timer {
     public void stop() {
         task.cancel();
         this.cancel();
+    }
+
+    public double getCurrentMemoryUsageInMegaByte() {
+        SystemInfo si = new SystemInfo();
+        OperatingSystem os = si.getOperatingSystem();
+        OSProcess process = os.getProcess((int) pid);
+        return process.getResidentSetSize() / (1024.0 * 1024.0);
     }
 
     public double inKiloByte() {

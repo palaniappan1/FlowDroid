@@ -83,14 +83,14 @@
 					</descriptorRefs>
 					<archive>
 						<manifest>
-							<addClasspath>true</addClasspath>
+<!--							<addClasspath>true</addClasspath>-->
 							<mainClass>soot.jimple.infoflow.cmd.MainClass</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
 				<executions>
 					<execution>
-						<id>simple-command</id>
+						<id>make-assembly</id>
 						<phase>package</phase>
 						<goals>
 							<goal>single</goal>
@@ -148,7 +148,17 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
 			<version>${slf4j.version}</version>
-            <optional>true</optional>
         </dependency>
+<!--		<dependency>-->
+<!--			<groupId>org.slf4j</groupId>-->
+<!--			<artifactId>slf4j-nop</artifactId>-->
+<!--			<version>1.7.36</version>-->
+<!--		</dependency>-->
+
+		<dependency>
+			<groupId>com.example.pal</groupId>
+			<artifactId>callgraph</artifactId>
+			<version>1.1-SNAPSHOT</version>
+		</dependency>
 	</dependencies>
 </project>

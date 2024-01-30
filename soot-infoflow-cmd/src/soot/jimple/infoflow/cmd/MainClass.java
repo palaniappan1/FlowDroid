@@ -11,11 +11,9 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.json.JSONArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import soot.jimple.infoflow.InfoflowConfiguration;
 import soot.jimple.infoflow.InfoflowConfiguration.AliasingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.CallbackSourceMode;
 import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
@@ -27,7 +25,7 @@ import soot.jimple.infoflow.InfoflowConfiguration.LayoutMatchingMode;
 import soot.jimple.infoflow.InfoflowConfiguration.PathBuildingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.PathReconstructionMode;
 import soot.jimple.infoflow.InfoflowConfiguration.StaticFieldTrackingMode;
-import soot.jimple.infoflow.android.ApkInfo;
+import soot.jimple.infoflow.android.EvaluationConfig;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration.CallbackAnalyzer;
 import soot.jimple.infoflow.android.SetupApplication;
@@ -37,23 +35,21 @@ import soot.jimple.infoflow.methodSummary.data.provider.LazySummaryProvider;
 import soot.jimple.infoflow.methodSummary.taintWrappers.ReportMissingSummaryWrapper;
 import soot.jimple.infoflow.methodSummary.taintWrappers.SummaryTaintWrapper;
 import soot.jimple.infoflow.methodSummary.taintWrappers.TaintWrapperFactory;
+import soot.jimple.infoflow.results.InfoflowPerformanceData;
 import soot.jimple.infoflow.taintWrappers.EasyTaintWrapper;
 import soot.jimple.infoflow.taintWrappers.ITaintPropagationWrapper;
 import soot.jimple.infoflow.taintWrappers.TaintWrapperSet;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
 
-import static soot.jimple.infoflow.cmd.EvaluationConfig.getNumber_of_Iterations;
-
 /**
  * Main class for running FlowDroid from the command-line
- * 
- * @author Steven Arzt
  *
+ * @author Steven Arzt
  */
 public class MainClass {
 
-	private final Logger logger = LoggerFactory.getLogger(getClass());
+    private final Logger logger = LoggerFactory.getLogger(getClass());
 
 	protected final Options options = new Options();
 	protected SetupApplication analyzer = null;
@@ -61,30 +57,17 @@ public class MainClass {
 
 	protected Set<String> filesToSkip = new HashSet<>();
 
-	protected static final List<AppAnalysisResult> appAnalysisResultList = new ArrayList<>();
+    protected static AppAnalysisResult appAnalysisResult;
 
-	protected static AppAnalysisResult appAnalysisResult;
+    protected static StopWatch stopWatch = null;
 
-	protected final static ArrayList<String> qilinPTAList = new ArrayList<>();
-
-	protected static StopWatch stopWatch = null;
-
-	protected static MemoryWatcher memoryWatcher = null;
-
-	protected static int ground_truth_for_this_APK = 0;
-
-	protected static JSONArray outerJsonArray = new JSONArray();
-
-	protected static CallGraphMetrics callGraphMetrics;
+    protected static CallGraphMetrics callGraphMetrics;
 
 	// Files
 	private static final String OPTION_CONFIG_FILE = "c";
 	private static final String OPTION_APK_FILE = "a";
 	private static final String OPTION_PLATFORMS_DIR = "p";
 	private static final String OPTION_SOURCES_SINKS_FILE = "s";
-
-	private static final String NUMBER_OF_ITERATIONS = "i";
-	private static final String K_CONFIGURATIONS_FOR_QILIN = "k";
 
 	private static final String RESULT_JSON_FILE = "r_j";
 	private static final String OPTION_OUTPUT_FILE = "o";
@@ -164,22 +147,20 @@ public class MainClass {
 	private void initializeCommandLineOptions() {
 		options.addOption("?", "help", false, "Print this help message");
 
-		// For the thesis purpose
-		options.addOption(RESULT_JSON_FILE, "json_result_file", true, "The ground truth result file");
-		options.addOption(NUMBER_OF_ITERATIONS, true, "The number of iterations to run for a given application");
-		options.addOption(K_CONFIGURATIONS_FOR_QILIN, true, "The number of iterations to run for a given application");
-		// Files
-		options.addOption(OPTION_CONFIG_FILE, "configfile", true, "Use the given configuration file");
-		options.addOption(OPTION_APK_FILE, "apkfile", true, "APK file to analyze");
-		options.addOption(OPTION_PLATFORMS_DIR, "platformsdir", true,
-				"Path to the platforms directory from the Android SDK");
-		options.addOption(OPTION_SOURCES_SINKS_FILE, "sourcessinksfile", true, "Definition file for sources and sinks");
-		options.addOption(OPTION_OUTPUT_FILE, "outputfile", true, "Output XML file for the discovered data flows");
-		options.addOption(OPTION_ADDITIONAL_CLASSPATH, "additionalclasspath", true,
-				"Additional JAR file that shal be put on the classpath");
-		options.addOption(OPTION_SKIP_APK_FILE, "skipapkfile", true,
-				"APK file to skip when processing a directory of input files");
-		options.addOption(OPTION_WRITE_JIMPLE_FILES, "writejimplefiles", true, "Write out the Jimple files");
+        // For the thesis purpose
+        options.addOption(RESULT_JSON_FILE, "json_result_file", true, "The ground truth result file");
+        // Files
+        options.addOption(OPTION_CONFIG_FILE, "configfile", true, "Use the given configuration file");
+        options.addOption(OPTION_APK_FILE, "apkfile", true, "APK file to analyze");
+        options.addOption(OPTION_PLATFORMS_DIR, "platformsdir", true,
+                "Path to the platforms directory from the Android SDK");
+        options.addOption(OPTION_SOURCES_SINKS_FILE, "sourcessinksfile", true, "Definition file for sources and sinks");
+        options.addOption(OPTION_OUTPUT_FILE, "outputfile", true, "Output XML file for the discovered data flows");
+        options.addOption(OPTION_ADDITIONAL_CLASSPATH, "additionalclasspath", true,
+                "Additional JAR file that shal be put on the classpath");
+        options.addOption(OPTION_SKIP_APK_FILE, "skipapkfile", true,
+                "APK file to skip when processing a directory of input files");
+        options.addOption(OPTION_WRITE_JIMPLE_FILES, "writejimplefiles", true, "Write out the Jimple files");
 
 		// Timeouts
 		options.addOption(OPTION_TIMEOUT, "timeout", true, "Timeout for the main data flow analysis");
@@ -280,239 +261,41 @@ public class MainClass {
 		options.addOption(OPTION_CALLGRAPH_ONLY, "callgraphonly", false, "Only compute the callgraph and terminate");
 	}
 
-	public void stopLogger(){
-
-	}
-
-	public static void getQilinPTAConfigs(int k){
-		int numberOfIterations = getNumber_of_Iterations();
-		int i =1;
-//		while(i <= numberOfIterations){
-			for(int j =1; j <= k; j++) {
-				int finalI = j;
-				Arrays.stream(InfoflowConfiguration.ConfigurablePTA.values()).map(Enum::toString).forEach(value -> qilinPTAList.add(value.replace("k", String.valueOf(finalI)).replace("_", "-")));
-			}
-			Arrays.stream(InfoflowConfiguration.NonConfigurablePTA.values()).map(Enum::toString).forEach(value -> qilinPTAList.add(value.replace("_", "-")));
-			i++;
-//		}
-	}
-
-	public static StringBuilder constructArgs(File file, CallgraphAlgorithm callgraphAlgorithm, String qilinPTA){
-		StringBuilder stringBuilder = new StringBuilder();
-		stringBuilder.append("-a\n");
-		stringBuilder.append(file.getAbsolutePath()).append("\n");
-		stringBuilder.append("-p\n");
-		stringBuilder.append(EvaluationConfig.getPlatform_directory()).append("\n");
-		stringBuilder.append("-s\n");
-		stringBuilder.append(EvaluationConfig.getSource_sink_file()).append("\n");
-		stringBuilder.append("-d\n");
-		stringBuilder.append("-cg\n");
-		stringBuilder.append(callgraphAlgorithm).append("\n");
-		if(!qilinPTA.isEmpty()){
-			stringBuilder.append("-qilin_pta\n");
-			stringBuilder.append(qilinPTA);
-		}
-		System.out.println(qilinPTA.isEmpty() ? callgraphAlgorithm : qilinPTA + "\n");
-		return stringBuilder;
-	}
-
-	public static void startMetrics(){
-		stopWatch = StopWatch.newAndStart("Analysis Time");
-		memoryWatcher = new MemoryWatcher("Analysis Memory");
-		memoryWatcher.start();
-	}
-
-	public static void stopMetrics(){
-		stopWatch.stop();
-		memoryWatcher.stop();
-	}
-
-	public static void computeQILINPTAs(File file){
-		int i = 1;
-		for (String qilinPTA : qilinPTAList) {
-			StringBuilder stringBuilder = constructArgs(file, CallgraphAlgorithm.QILIN, qilinPTA);
-			try {
-				System.out.println("Evaluating " + i + " of " + qilinPTAList.size() + " configurations");
-				callGraphMetrics = CallGraphMetrics.getInstance();
-				runAnalysis(stringBuilder, file);
-				outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK, 0));
-				i++;
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-		}
-	}
-
-	public static void runAnalysis(StringBuilder stringBuilder, File file) throws Exception {
-		appAnalysisResult = AppAnalysisResult.getInstance();
-		MainClass main = new MainClass();
-		startMetrics();
-		main.run(stringBuilder.toString().split("\n"));
-		stopMetrics();
-		setMetrics(appAnalysisResult, file);
-	}
-
-	public static void setMetrics(AppAnalysisResult appAnalysisResult, File file){
-		if(!callGraphMetrics.getCallGraphConstructionMetrics().isEmpty()){
-			AnalysisMetrics analysisMetrics = AnalysisMetrics.getInstance();
-			if(file.getName().equals(ApkInfo.getApkName())) {
-				analysisMetrics.setAnalysisTime(stopWatch.elapsed() + ApkInfo.getInitializeSootTime());
-			}
-			analysisMetrics.setMemoryConsumed(memoryWatcher.inMegaByte());
-			Metrics metrics = Metrics.getInstance();
-			metrics.setCallGraphMetrics(callGraphMetrics);
-			metrics.setAnalysisMetrics(analysisMetrics);
-			appAnalysisResult.setMetrics(callGraphMetrics.getCallGraphConstructionMetrics().get(0).getCallGraphAlgorithm(), metrics);
-		}
-	}
-
-	private static List<File> listDirectories(String directoryPath) {
-		List<File> directories = new ArrayList<>();
-
-		File rootDir = new File(directoryPath);
-
-		// Check if the specified path is a directory
-		if (rootDir.isDirectory()) {
-			// Get a list of all files and directories in the specified path
-			File[] files = rootDir.listFiles();
-
-			if (files != null) {
-				// Loop through each file/directory
-				for (File file : files) {
-					// Check if it is a directory
-					if (file.isDirectory()) {
-						// Add the directory path to the list
-						directories.add(file);
-					}
-				}
-			}
-		} else {
-			System.out.println("Error: The specified path is not a directory.");
-		}
-
-		return directories;
-	}
-
-	private static List<File> listFiles(String directoryPath) {
-		List<File> fileList = new ArrayList<>();
-		listFilesRecursive(directoryPath, fileList);
-		return fileList;
-	}
-
-	private static void listFilesRecursive(String directoryPath, List<File> filePaths) {
-		File directory = new File(directoryPath);
-
-		// Check if the provided path is a directory
-		if (directory.isDirectory()) {
-			// List all files in the current directory
-			File[] files = directory.listFiles();
-			if (files != null) {
-				for (File file : files) {
-					if(file.isFile() && file.toString().contains(".apk")) {
-						filePaths.add(file);
-					}
-					// If the current item is a directory, recurse into it
-					if (file.isDirectory()) {
-						listFilesRecursive(file.getAbsolutePath(), filePaths);
-					}
-				}
-			}
-		}
-		else{
-			filePaths.add(directory);
-		}
-	}
-
-	public static void dumpMetrics(){
-		System.out.println("Writing Evaluation Output ........ of " + EvaluationConfig.getCurrentlyProcessingApkName());
-		Util.writeToJsonFile(outerJsonArray, EvaluationConfig.getJSON_FILE_PATh());
-		Util.writeToCSVFile();
-		Util.decomposeJsonFile(ground_truth_for_this_APK);
-		Util.writeToJsonFile(Util.getDecomposedJsonArray(), EvaluationConfig.getDecomposedJSON_FILE_PATh());
-		Util.writeDecomposedJsonToCSVFile();
-	}
-
-	public static void main(String[] args) {
-
-		setEvaluationConfigurations(args);
-
-		// Create a File object representing the folder
-		getQilinPTAConfigs(EvaluationConfig.getK_configuration_for_QILIN());
-
-		// List all files and directories in the folder
-		try{
-			List<File> files = listFiles(EvaluationConfig.getApkDirectoryPath());
-			for (File file : files) {
-//				file = listFiles(file.getPath()).get(0);
-				System.out.println("Started Processing " + file.getName());
-				ground_truth_for_this_APK = Util.getGroundTruthLeaks(file.getName());
-				EvaluationConfig.setCurrentlyProcessingApkName(file.getName().replace(".apk", ""));
-				if (file.isFile()) {
-					appAnalysisResult = AppAnalysisResult.getInstance();
-					int i = 1;
-					while(i <= EvaluationConfig.getNumber_of_Iterations()){
-						for (CallgraphAlgorithm callgraphAlgorithm : CallgraphAlgorithm.values()) {
-							if (callgraphAlgorithm.equals(CallgraphAlgorithm.AutomaticSelection)
-									|| callgraphAlgorithm.equals(CallgraphAlgorithm.OnDemand) || callgraphAlgorithm.equals(CallgraphAlgorithm.GEOM)) {
-								continue;
-							}
-							System.out.println("Iteration " + i + " " + callgraphAlgorithm);
-							Metrics metrics = Metrics.getInstance();
-							callGraphMetrics = CallGraphMetrics.getInstance();
-							if (callgraphAlgorithm.equals(CallgraphAlgorithm.QILIN)) {
-								computeQILINPTAs(file);
-							}
-							else{
-								runAnalysis(constructArgs(file, callgraphAlgorithm, ""), file);
-								outerJsonArray.put(Util.createJsonObject(appAnalysisResult, ground_truth_for_this_APK, i));
-								System.out.println(qilinPTAList.size());
-							}
-						}
-						i++;
-					}
-				}
-//				dumpMetrics();
-				System.gc();
-			}
-		}
-		catch (Exception exception){
-			exception.printStackTrace();
-		}
-		finally {
-			System.exit(0);
-		}
+    public static void startMetrics() {
+        stopWatch = StopWatch.newAndStart("Analysis Time");
+//        memoryWatcher = MemoryWatcher.getInstance("Analysis Memory");
+//        memoryWatcher.start();
     }
 
-	private static void setEvaluationConfigurations(String[] args) {
-		MainClass main = new MainClass();
-		CommandLineParser parser = new DefaultParser();
-		try {
-			CommandLine cmd = parser.parse(main.options, args);
-			String apkDirectory = cmd.getOptionValue(OPTION_APK_FILE);
-			if(apkDirectory != null){
-				EvaluationConfig.set_APK_DIRECTORY_PATH(apkDirectory);
-			}
-			String result_Json_File = cmd.getOptionValue(RESULT_JSON_FILE);
-			if(result_Json_File != null){
-				EvaluationConfig.set_RESULT_JSON_FILE(result_Json_File);
-			}
-			String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);
-			if(platformsDir != null){
-				EvaluationConfig.setPlatform_directory(platformsDir);
-			}
-			String source_sinks = cmd.getOptionValue(OPTION_SOURCES_SINKS_FILE);
-			if(source_sinks != null){
-				EvaluationConfig.setSource_sink_file(source_sinks);
-			}
-			int number_of_iterations = Integer.parseInt(cmd.getOptionValue(NUMBER_OF_ITERATIONS));
-			int k_configurations = Integer.parseInt(cmd.getOptionValue(K_CONFIGURATIONS_FOR_QILIN));
-			EvaluationConfig.setNumber_of_Iterations(number_of_iterations);
-			EvaluationConfig.setK_configuration_for_QILIN(k_configurations);
-		}
-		catch (Exception exception){
-			exception.printStackTrace();
-		}
-	}
+    public static void stopMetrics() {
+        stopWatch.stop();
+//        memoryWatcher.stop();
+    }
+
+    public static void main(String[] args) throws Exception {
+        appAnalysisResult = AppAnalysisResult.getInstance();
+        callGraphMetrics = CallGraphMetrics.getInstance();
+        MainClass main = new MainClass();
+        startMetrics();
+        main.run(args);
+        stopMetrics();
+        setMetrics(appAnalysisResult);
+    }
+
+    public static void setMetrics(AppAnalysisResult appAnalysisResult) {
+        if (!callGraphMetrics.getCallGraphConstructionMetrics().isEmpty()) {
+            AnalysisMetrics analysisMetrics = AnalysisMetrics.getInstance();
+            analysisMetrics.setAnalysisTime(stopWatch.elapsed());
+            analysisMetrics.setMemoryConsumed(EvaluationConfig.getMemory_consumed());
+            Metrics metrics = Metrics.getInstance();
+            metrics.setCallGraphMetrics(callGraphMetrics);
+            metrics.setAnalysisMetrics(analysisMetrics);
+            appAnalysisResult.setMetrics(metrics);
+//            Util.writeToCsv(appAnalysisResult, EvaluationConfig.getCSV_FILE_PATh());
+            System.out.println("Written to file");
+        }
+    }
+
 
 	protected void run(String[] args) throws Exception {
 		// We need proper parameters
@@ -613,7 +396,7 @@ public class MainClass {
 				analyzer.setTaintWrapper(taintWrapper);
 
 				// Start the data flow analysis
-				analyzer.runInfoflow(callGraphMetrics, apkFile.getName());
+				analyzer.runInfoflow(callGraphMetrics);
 
 				if (reportMissingSummaryWrapper != null) {
 					String file = cmd.getOptionValue(OPTION_MISSING_SUMMARIES_FILE);
@@ -946,54 +729,61 @@ public class MainClass {
 		}
 	}
 
-	/**
-	 * Parses the given command-line options and fills the given configuration
-	 * object accordingly
-	 * 
-	 * @param cmd    The command line to parse
-	 * @param config The configuration object to fill
-	 */
-	private void parseCommandLineOptions(CommandLine cmd, InfoflowAndroidConfiguration config) {
-		// Files
-		{
-			String apkFile = cmd.getOptionValue(OPTION_APK_FILE);
-			if (apkFile != null && !apkFile.isEmpty()) {
-				config.getAnalysisFileConfig().setTargetAPKFile(apkFile);
-				String[] parts = apkFile.split("/");
-				appAnalysisResult.setAPP_NAME(parts[parts.length - 1]);
-			}
-		}
-		{
-			if(cmd.hasOption(QILIN_PTA)){
-				config.setQILIN_PTA(cmd.getOptionValue(QILIN_PTA));
-			}
-		}
-		{
-			String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);
-			if (platformsDir != null && !platformsDir.isEmpty()) {
-				config.getAnalysisFileConfig().setAndroidPlatformDir(platformsDir);
-				EvaluationConfig.setPlatform_directory(platformsDir);
-			}
-		}
-		{
-			String sourcesSinks = cmd.getOptionValue(OPTION_SOURCES_SINKS_FILE);
-			if (sourcesSinks != null && !sourcesSinks.isEmpty()) {
-				config.getAnalysisFileConfig().setSourceSinkFile(sourcesSinks);
-				EvaluationConfig.setSource_sink_file(sourcesSinks);
-			}
-		}
-		{
-			String outputFile = cmd.getOptionValue(OPTION_OUTPUT_FILE);
-			if (outputFile != null && !outputFile.isEmpty())
-				config.getAnalysisFileConfig().setOutputFile(outputFile);
-		}
-		{
-			String additionalClasspath = cmd.getOptionValue(OPTION_ADDITIONAL_CLASSPATH);
-			if (additionalClasspath != null && !additionalClasspath.isEmpty())
-				config.getAnalysisFileConfig().setAdditionalClasspath(additionalClasspath);
-		}
-		if (cmd.hasOption(OPTION_WRITE_JIMPLE_FILES))
-			config.setWriteOutputFiles(true);
+    /**
+     * Parses the given command-line options and fills the given configuration
+     * object accordingly
+     *
+     * @param cmd    The command line to parse
+     * @param config The configuration object to fill
+     */
+    private void parseCommandLineOptions(CommandLine cmd, InfoflowAndroidConfiguration config) {
+        // Files
+        {
+            String apkFile = cmd.getOptionValue(OPTION_APK_FILE);
+            if (apkFile != null && !apkFile.isEmpty()) {
+                config.getAnalysisFileConfig().setTargetAPKFile(apkFile);
+                String[] parts = apkFile.split("/");
+                EvaluationConfig.setCurrentlyProcessingApkName(parts[parts.length - 1]);
+                appAnalysisResult.setAPP_NAME(EvaluationConfig.getCurrentlyProcessingApkName());
+            }
+        }
+        {
+            if (cmd.hasOption(QILIN_PTA)) {
+                config.setQILIN_PTA(cmd.getOptionValue(QILIN_PTA));
+            }
+        }
+        {
+            String result_Json_File = cmd.getOptionValue(RESULT_JSON_FILE);
+            if (result_Json_File != null) {
+                EvaluationConfig.set_RESULT_JSON_FILE(result_Json_File);
+            }
+        }
+        {
+            String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);
+            if (platformsDir != null && !platformsDir.isEmpty()) {
+                config.getAnalysisFileConfig().setAndroidPlatformDir(platformsDir);
+            }
+        }
+        {
+            String sourcesSinks = cmd.getOptionValue(OPTION_SOURCES_SINKS_FILE);
+            if (sourcesSinks != null && !sourcesSinks.isEmpty()) {
+                config.getAnalysisFileConfig().setSourceSinkFile(sourcesSinks);
+            }
+        }
+        {
+            String outputFile = cmd.getOptionValue(OPTION_OUTPUT_FILE);
+            if (outputFile != null && !outputFile.isEmpty()) {
+//                config.getAnalysisFileConfig().setOutputFile(outputFile);
+                EvaluationConfig.set_output_directory_path(outputFile);
+            }
+        }
+        {
+            String additionalClasspath = cmd.getOptionValue(OPTION_ADDITIONAL_CLASSPATH);
+            if (additionalClasspath != null && !additionalClasspath.isEmpty())
+                config.getAnalysisFileConfig().setAdditionalClasspath(additionalClasspath);
+        }
+        if (cmd.hasOption(OPTION_WRITE_JIMPLE_FILES))
+            config.setWriteOutputFiles(true);
 
 		// Timeouts
 		{
@@ -1079,67 +869,74 @@ public class MainClass {
 				config.getIccConfig().setIccModel(iccModel);
 		}
 
-		// Modes and algorithms
-		{
-			String cgalgo = cmd.getOptionValue(OPTION_CALLGRAPH_ALGO);
-			if (cgalgo != null && !cgalgo.isEmpty())
-				config.setCallgraphAlgorithm(parseCallgraphAlgorithm(cgalgo));
-		}
-		{
-			String layoutMode = cmd.getOptionValue(OPTION_LAYOUT_MODE);
-			if (layoutMode != null && !layoutMode.isEmpty())
-				config.getSourceSinkConfig().setLayoutMatchingMode(parseLayoutMatchingMode(layoutMode));
-		}
-		{
-			String pathAlgo = cmd.getOptionValue(OPTION_PATH_RECONSTRUCTION_ALGO);
-			if (pathAlgo != null && !pathAlgo.isEmpty())
-				config.getPathConfiguration().setPathBuildingAlgorithm(parsePathReconstructionAlgo(pathAlgo));
-		}
-		{
-			String callbackAnalyzer = cmd.getOptionValue(OPTION_CALLBACK_ANALYZER);
-			if (callbackAnalyzer != null && !callbackAnalyzer.isEmpty())
-				config.getCallbackConfig().setCallbackAnalyzer(parseCallbackAnalyzer(callbackAnalyzer));
-		}
-		{
-			String solver = cmd.getOptionValue(OPTION_DATA_FLOW_SOLVER);
-			if (solver != null && !solver.isEmpty())
-				config.getSolverConfiguration().setDataFlowSolver(parseDataFlowSolver(solver));
-		}
-		{
-			String aliasAlgo = cmd.getOptionValue(OPTION_ALIAS_ALGO);
-			if (aliasAlgo != null && !aliasAlgo.isEmpty())
-				config.setAliasingAlgorithm(parseAliasAlgorithm(aliasAlgo));
-		}
-		{
-			String eliminationMode = cmd.getOptionValue(OPTION_CODE_ELIMINATION_MODE);
-			if (eliminationMode != null && !eliminationMode.isEmpty())
-				config.setCodeEliminationMode(parseCodeEliminationMode(eliminationMode));
-		}
-		{
-			String callbackMode = cmd.getOptionValue(OPTION_CALLBACK_SOURCE_MODE);
-			if (callbackMode != null && !callbackMode.isEmpty())
-				config.getSourceSinkConfig().setCallbackSourceMode(parseCallbackSourceMode(callbackMode));
-		}
-		{
-			String pathMode = cmd.getOptionValue(OPTION_PATH_RECONSTRUCTION_MODE);
-			if (pathMode != null && !pathMode.isEmpty())
-				config.getPathConfiguration().setPathReconstructionMode(parsePathReconstructionMode(pathMode));
-		}
-		{
-			String implicitMode = cmd.getOptionValue(OPTION_IMPLICIT_FLOW_MODE);
-			if (implicitMode != null && !implicitMode.isEmpty())
-				config.setImplicitFlowMode(parseImplicitFlowMode(implicitMode));
-		}
-		{
-			String staticFlowMode = cmd.getOptionValue(OPTION_STATIC_FLOW_TRACKING_MODE);
-			if (staticFlowMode != null && !staticFlowMode.isEmpty())
-				config.setStaticFieldTrackingMode(parseStaticFlowMode(staticFlowMode));
-		}
-		{
-			String dataflowDirection = cmd.getOptionValue(OPTION_DATA_FLOW_DIRECTION);
-			if (dataflowDirection != null && !dataflowDirection.isEmpty())
-				config.setDataFlowDirection(parseDataFlowDirection(dataflowDirection));
-		}
+        // Modes and algorithms
+        {
+            String cgalgo = cmd.getOptionValue(OPTION_CALLGRAPH_ALGO);
+            if (cgalgo != null && !cgalgo.isEmpty()) {
+                CallgraphAlgorithm callgraphAlgorithm = parseCallgraphAlgorithm(cgalgo);
+                config.setCallgraphAlgorithm(callgraphAlgorithm);
+                if (callgraphAlgorithm == CallgraphAlgorithm.QILIN) {
+                    appAnalysisResult.setCg_name(cmd.getOptionValue(QILIN_PTA));
+                } else {
+                    appAnalysisResult.setCg_name(cgalgo);
+                }
+            }
+        }
+        {
+            String layoutMode = cmd.getOptionValue(OPTION_LAYOUT_MODE);
+            if (layoutMode != null && !layoutMode.isEmpty())
+                config.getSourceSinkConfig().setLayoutMatchingMode(parseLayoutMatchingMode(layoutMode));
+        }
+        {
+            String pathAlgo = cmd.getOptionValue(OPTION_PATH_RECONSTRUCTION_ALGO);
+            if (pathAlgo != null && !pathAlgo.isEmpty())
+                config.getPathConfiguration().setPathBuildingAlgorithm(parsePathReconstructionAlgo(pathAlgo));
+        }
+        {
+            String callbackAnalyzer = cmd.getOptionValue(OPTION_CALLBACK_ANALYZER);
+            if (callbackAnalyzer != null && !callbackAnalyzer.isEmpty())
+                config.getCallbackConfig().setCallbackAnalyzer(parseCallbackAnalyzer(callbackAnalyzer));
+        }
+        {
+            String solver = cmd.getOptionValue(OPTION_DATA_FLOW_SOLVER);
+            if (solver != null && !solver.isEmpty())
+                config.getSolverConfiguration().setDataFlowSolver(parseDataFlowSolver(solver));
+        }
+        {
+            String aliasAlgo = cmd.getOptionValue(OPTION_ALIAS_ALGO);
+            if (aliasAlgo != null && !aliasAlgo.isEmpty())
+                config.setAliasingAlgorithm(parseAliasAlgorithm(aliasAlgo));
+        }
+        {
+            String eliminationMode = cmd.getOptionValue(OPTION_CODE_ELIMINATION_MODE);
+            if (eliminationMode != null && !eliminationMode.isEmpty())
+                config.setCodeEliminationMode(parseCodeEliminationMode(eliminationMode));
+        }
+        {
+            String callbackMode = cmd.getOptionValue(OPTION_CALLBACK_SOURCE_MODE);
+            if (callbackMode != null && !callbackMode.isEmpty())
+                config.getSourceSinkConfig().setCallbackSourceMode(parseCallbackSourceMode(callbackMode));
+        }
+        {
+            String pathMode = cmd.getOptionValue(OPTION_PATH_RECONSTRUCTION_MODE);
+            if (pathMode != null && !pathMode.isEmpty())
+                config.getPathConfiguration().setPathReconstructionMode(parsePathReconstructionMode(pathMode));
+        }
+        {
+            String implicitMode = cmd.getOptionValue(OPTION_IMPLICIT_FLOW_MODE);
+            if (implicitMode != null && !implicitMode.isEmpty())
+                config.setImplicitFlowMode(parseImplicitFlowMode(implicitMode));
+        }
+        {
+            String staticFlowMode = cmd.getOptionValue(OPTION_STATIC_FLOW_TRACKING_MODE);
+            if (staticFlowMode != null && !staticFlowMode.isEmpty())
+                config.setStaticFieldTrackingMode(parseStaticFlowMode(staticFlowMode));
+        }
+        {
+            String dataflowDirection = cmd.getOptionValue(OPTION_DATA_FLOW_DIRECTION);
+            if (dataflowDirection != null && !dataflowDirection.isEmpty())
+                config.setDataFlowDirection(parseDataFlowDirection(dataflowDirection));
+        }
 
 		{
 			String[] toSkip = cmd.getOptionValues(OPTION_SKIP_APK_FILE);

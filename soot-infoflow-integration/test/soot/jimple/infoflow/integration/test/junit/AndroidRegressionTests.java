@@ -98,7 +98,7 @@ public class AndroidRegressionTests extends BaseJUnitTests {
         ssinks.add("<android.util.Log: int d(java.lang.String,java.lang.String)> -> _SINK_");
         ssinks.add("<kotlin.io.TextStreamsKt: java.util.List readLines(java.io.Reader)> -> _SOURCE_");
 
-        InfoflowResults results = app.runInfoflow(PermissionMethodParser.fromStringList(ssinks), "");
+        InfoflowResults results = app.runInfoflow(PermissionMethodParser.fromStringList(ssinks));
         Assert.assertEquals(4, results.size());
         Assert.assertEquals(4, results.getResultSet().size());
     }
@@ -157,7 +157,7 @@ public class AndroidRegressionTests extends BaseJUnitTests {
         ssinks.add("<android.telephony.TelephonyManager: java.lang.String getDeviceId()> android.permission.READ_PHONE_STATE -> _SOURCE_");
         ssinks.add("<android.util.Log: int i(java.lang.String,java.lang.String)> -> _SINK_");
 
-        InfoflowResults results = app.runInfoflow(PermissionMethodParser.fromStringList(ssinks), "");
+        InfoflowResults results = app.runInfoflow(PermissionMethodParser.fromStringList(ssinks));
         Assert.assertEquals(1, results.size());
     }
 
@@ -172,7 +172,7 @@ public class AndroidRegressionTests extends BaseJUnitTests {
         List<String> ssinks = new ArrayList<>();
         ssinks.add("<java.util.Locale: java.lang.String getCountry()> -> _SOURCE_");
         ssinks.add("<android.util.Log: int i(java.lang.String,java.lang.String)> -> _SINK_");
-        InfoflowResults results = app.runInfoflow(PermissionMethodParser.fromStringList(ssinks), "");
+        InfoflowResults results = app.runInfoflow(PermissionMethodParser.fromStringList(ssinks));
         Assert.assertEquals(1, results.size());
     }
 }
