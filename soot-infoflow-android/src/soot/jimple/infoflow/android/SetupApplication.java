@@ -12,18 +12,17 @@ package soot.jimple.infoflow.android;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import javax.xml.stream.XMLStreamException;
 
+import application.CallGraphApplication;
+import com.google.common.base.Stopwatch;
+import config.CallGraphAlgorithm;
+import config.CallGraphConfig;
+import metrics.CallGraphConstructionMetrics;
+import metrics.CallGraphMetricsWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
@@ -39,6 +38,7 @@ import soot.SootField;
 import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.Stmt;
+import soot.jimple.infoflow.*;
 import soot.jimple.infoflow.AbstractInfoflow;
 import soot.jimple.infoflow.BackwardsInfoflow;
 import soot.jimple.infoflow.IInfoflow;
@@ -78,6 +78,7 @@ import soot.jimple.infoflow.android.source.AccessPathBasedSourceSinkManager;
 import soot.jimple.infoflow.android.source.ConfigurationBasedCategoryFilter;
 import soot.jimple.infoflow.android.source.UnsupportedSourceSinkFormatException;
 import soot.jimple.infoflow.android.source.parsers.xml.XMLSourceSinkParser;
+import soot.jimple.infoflow.android.util.CallGraphMetrics;
 import soot.jimple.infoflow.cfg.BiDirICFGFactory;
 import soot.jimple.infoflow.cfg.LibraryClassPatcher;
 import soot.jimple.infoflow.config.IInfoflowConfig;
@@ -121,6 +122,8 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 	protected InfoflowAndroidConfiguration config = new InfoflowAndroidConfiguration();
 
+	protected CallGraphConfig callGraphConfig = null;
+
 	protected Set<SootClass> entrypoints = null;
 	protected Set<String> callbackClasses = null;
 	protected AndroidEntryPointCreator entryPointCreator = null;
@@ -151,6 +154,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 	protected TaintPropagationHandler taintPropagationHandler = null;
 	protected TaintPropagationHandler aliasPropagationHandler = null;
 
+	protected CallGraphMetrics callGraphMetrics;
 	protected IUsageContextProvider usageContextProvider = null;
 
 	protected IInPlaceInfoflow infoflow = null;
@@ -626,12 +630,33 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		// If we didn't create the Soot instance, we can't be sure what its callgraph
 		// configuration is
-		if (config.getSootIntegrationMode() == SootIntegrationMode.UseExistingInstance)
-			configureCallgraph();
+//		if (config.getSootIntegrationMode() == SootIntegrationMode.UseExistingInstance)
+//			configureCallgraph();
 
 		// Construct the actual callgraph
 		logger.info("Constructing the callgraph...");
-		PackManager.v().getPack("cg").apply();
+//		PackManager.v().getPack("cg").apply();
+		if(callGraphConfig == null) {
+			callGraphConfig = CallGraphConfig.getInstance();
+			CallGraphAlgorithm callGraphAlgorithm = configureCallgraph();
+			callGraphConfig.setCallGraphAlgorithm(callGraphAlgorithm);
+			callGraphConfig.setIsSootSceneProvided(true);
+			if (callGraphAlgorithm == CallGraphAlgorithm.QILIN) {
+				callGraphConfig.setQilinPta(config.getQILIN_PTA());
+			}
+		}
+		try {
+			CallGraphMetricsWrapper callGraphMetrics = CallGraphApplication.generateCallGraph(Scene.v(), callGraphConfig);
+			Scene.v().setCallGraph(callGraphMetrics.getCallGraph());
+			if(this.callGraphMetrics != null) {
+				this.callGraphMetrics.setCallGraphConstructionMetrics(callGraphMetrics.getCallGraphConstructionMetrics());
+			}
+			EvaluationConfig.setNum_reachable_methods(Scene.v().getReachableMethods().size());
+		}
+		catch (Exception exception){
+			exception.printStackTrace();
+			System.exit(1);
+		}
 
 		// ICC instrumentation
 		if (iccInstrumenter != null)
@@ -1212,7 +1237,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		Options.v().set_soot_classpath(getClasspath());
 		Main.v().autoSetOptions();
-		configureCallgraph();
+//		configureCallgraph();
 
 		// Load whatever we need
 		logger.info("Loading dex files...");
@@ -1235,34 +1260,44 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 	/**
 	 * Configures the callgraph options for Soot according to FlowDroid's settings
 	 */
-	protected void configureCallgraph() {
+	protected CallGraphAlgorithm configureCallgraph() {
 		// Configure the callgraph algorithm
+		CallGraphAlgorithm callGraphAlgorithm;
 		switch (config.getCallgraphAlgorithm()) {
-		case AutomaticSelection:
-		case SPARK:
-			Options.v().setPhaseOption("cg.spark", "on");
-			break;
-		case GEOM:
-			Options.v().setPhaseOption("cg.spark", "on");
-			AbstractInfoflow.setGeomPtaSpecificOptions();
-			break;
-		case CHA:
-			Options.v().setPhaseOption("cg.cha", "on");
-			break;
-		case RTA:
-			Options.v().setPhaseOption("cg.spark", "on");
-			Options.v().setPhaseOption("cg.spark", "rta:true");
-			Options.v().setPhaseOption("cg.spark", "on-fly-cg:false");
-			break;
-		case VTA:
-			Options.v().setPhaseOption("cg.spark", "on");
-			Options.v().setPhaseOption("cg.spark", "vta:true");
-			break;
-		default:
-			throw new RuntimeException("Invalid callgraph algorithm");
+			case QILIN:
+				callGraphAlgorithm = CallGraphAlgorithm.QILIN;
+				break;
+			case AutomaticSelection:
+			case SPARK:
+				callGraphAlgorithm = CallGraphAlgorithm.SPARK;
+//			Options.v().setPhaseOption("cg.spark", "on");
+				break;
+			case GEOM:
+				callGraphAlgorithm = CallGraphAlgorithm.GEOM;
+//			Options.v().setPhaseOption("cg.spark", "on");
+//			AbstractInfoflow.setGeomPtaSpecificOptions();
+				break;
+			case CHA:
+				callGraphAlgorithm = CallGraphAlgorithm.CHA;
+//			Options.v().setPhaseOption("cg.cha", "on");
+				break;
+			case RTA:
+				callGraphAlgorithm = CallGraphAlgorithm.RTA;
+//			Options.v().setPhaseOption("cg.spark", "on");
+//			Options.v().setPhaseOption("cg.spark", "rta:true");
+//			Options.v().setPhaseOption("cg.spark", "on-fly-cg:false");
+				break;
+			case VTA:
+				callGraphAlgorithm = CallGraphAlgorithm.VTA;
+//			Options.v().setPhaseOption("cg.spark", "on");
+//			Options.v().setPhaseOption("cg.spark", "vta:true");
+				break;
+			default:
+				throw new RuntimeException("Invalid callgraph algorithm");
 		}
 		if (config.getEnableReflection())
 			Options.v().setPhaseOption("cg", "types-for-invoke:true");
+		return callGraphAlgorithm;
 	}
 
 	/**
@@ -1449,7 +1484,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		if (sourceSinkFile != null && !sourceSinkFile.isEmpty())
 			config.getAnalysisFileConfig().setSourceSinkFile(sourceSinkFile);
 
-		return runInfoflow();
+		return runInfoflow(CallGraphMetrics.getInstance());
 	}
 
 	/**
@@ -1460,7 +1495,8 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 	 * @throws XmlPullParserException Thrown if the Android manifest file could not
 	 *                                be read.
 	 */
-	public InfoflowResults runInfoflow() throws IOException, XmlPullParserException {
+	public InfoflowResults runInfoflow(CallGraphMetrics callGraphMetrics) throws IOException, XmlPullParserException {
+		this.callGraphMetrics = callGraphMetrics;
 		// If we don't have a source/sink file by now, we cannot run the data
 		// flow analysis
 		String sourceSinkFile = config.getAnalysisFileConfig().getSourceSinkFile();
@@ -1485,6 +1521,40 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		}
 
 		return runInfoflow(parser);
+	}
+
+	public Scene runInfoFlowAndReturnScene(CallGraphConfig callGraphConfig){
+		// Setup Soot
+		G.reset();
+		initializeSoot();
+		this.callGraphConfig = callGraphConfig;
+		// Parse Basic App Resources for collecting implicit callbacks
+		try {
+			parseAppResources();
+		} catch (IOException | XmlPullParserException e) {
+			logger.error("Parse app resource failed", e);
+			throw new RuntimeException("Parse app resource failed", e);
+		}
+		if (entrypoints == null || entrypoints.isEmpty()) {
+			logger.warn("No entry points");
+			return null;
+		}
+		processEntryPointForCreatingScene();
+		return Scene.v();
+	}
+
+
+	protected void processEntryPointForCreatingScene(){
+		// Perform basic app parsing
+		long callbackDuration = System.nanoTime();
+		try {
+			calculateCallbacks(null);
+		} catch (IOException | XmlPullParserException e) {
+			throw new RuntimeException(e);
+		}
+		callbackDuration = Math.round((System.nanoTime() - callbackDuration) / 1E9);
+		logger.info(
+				String.format("Collecting callbacks and building a callgraph took %d seconds", (int) callbackDuration));
 	}
 
 	/**
@@ -1628,6 +1698,8 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 					lastResults.setPerformanceData(perfData = new InfoflowPerformanceData());
 				perfData.setCallgraphConstructionSeconds((int) callbackDuration);
 				perfData.setTotalRuntimeSeconds((int) Math.round((System.nanoTime() - beforeEntryPoint) / 1E9));
+				EvaluationConfig.setMemory_consumed(perfData.getMaxMemoryConsumption());
+				EvaluationConfig.setNum_methods_propagated(perfData.getMethodPropagationCount());
 			}
 		}
 

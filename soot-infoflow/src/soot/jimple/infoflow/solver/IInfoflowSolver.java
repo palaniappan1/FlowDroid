@@ -99,6 +99,8 @@ public interface IInfoflowSolver {
 	 */
 	public long getPropagationCount();
 
+	public long getMethodsPropagatedCount();
+
 	/**
 	 * Solves the data flow problem
 	 */

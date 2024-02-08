@@ -68,7 +68,7 @@ public class InfoflowConfiguration {
 	 * the data flow tracker
 	 */
 	public static enum CallgraphAlgorithm {
-		AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM, OnDemand
+		AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM, OnDemand, QILIN
 	}
 
 	/**
@@ -1387,6 +1387,8 @@ public class InfoflowConfiguration {
 	private AccessPathConfiguration accessPathConfiguration = new AccessPathConfiguration();
 
 	private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
+
+	private String QILIN_PTA = null;
 	private AliasingAlgorithm aliasingAlgorithm = AliasingAlgorithm.FlowSensitive;
 	private CodeEliminationMode codeEliminationMode = CodeEliminationMode.PropagateConstants;
 	private StaticFieldTrackingMode staticFieldTrackingMode = StaticFieldTrackingMode.ContextFlowSensitive;
@@ -1751,6 +1753,14 @@ public class InfoflowConfiguration {
 	 */
 	public void setCallgraphAlgorithm(CallgraphAlgorithm algorithm) {
 		this.callgraphAlgorithm = algorithm;
+	}
+
+	public void setQILIN_PTA(String QILIN_PTA){
+		this.QILIN_PTA = QILIN_PTA;
+	}
+
+	public String getQILIN_PTA() {
+		return QILIN_PTA;
 	}
 
 	/**

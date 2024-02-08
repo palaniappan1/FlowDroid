@@ -17,6 +17,8 @@ public class InfoflowPerformanceData {
 	private int maxMemoryConsumption = -1;
 	private long edgePropagationCount = -1;
 
+	private long methodPropagationCount = -1;
+
 	private int sourceCount = -1;
 	private int sinkCount = -1;
 
@@ -356,4 +358,11 @@ public class InfoflowPerformanceData {
 				&& totalRuntimeSeconds == other.totalRuntimeSeconds;
 	}
 
+	public long getMethodPropagationCount() {
+		return methodPropagationCount;
+	}
+
+	public void setMethodPropagationCount(long methodPropagationCount) {
+		this.methodPropagationCount = methodPropagationCount;
+	}
 }

@@ -157,5 +157,15 @@
 		    <artifactId>kryo</artifactId>
 		    <version>5.4.0</version>
 		</dependency>
+		<dependency>
+			<groupId>com.github.oshi</groupId>
+			<artifactId>oshi-core</artifactId>
+			<version>6.4.6</version>
+		</dependency>
+		<dependency>
+			<groupId>com.example.pal</groupId>
+			<artifactId>callgraph</artifactId>
+			<version>${callgraph.version}</version>
+		</dependency>
 	</dependencies>
 </project>

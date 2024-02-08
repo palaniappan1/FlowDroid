@@ -961,11 +961,14 @@ public abstract class AbstractInfoflow implements IInfoflow {
 				int taintPropagationSeconds = (int) Math.round((System.nanoTime() - beforeTaintPropagation) / 1E9);
 				performanceData.addTaintPropagationSeconds(taintPropagationSeconds);
 				performanceData.addEdgePropagationCount(forwardSolver.getPropagationCount());
+				performanceData.setMethodPropagationCount(forwardSolver.getMethodsPropagatedCount());
 				if (backwardSolver != null)
 					performanceData.addEdgePropagationCount(backwardSolver.getPropagationCount());
 
 				// Print taint wrapper statistics
 				if (taintWrapper != null) {
+					logger.info("Number of reachable Methods: " + Scene.v().getReachableMethods().size());
+					logger.info("Methods Propagation count: " + forwardSolver.getMethodsPropagatedCount());
 					logger.info("Taint wrapper hits: " + taintWrapper.getWrapperHits());
 					logger.info("Taint wrapper misses: " + taintWrapper.getWrapperMisses());
 				}

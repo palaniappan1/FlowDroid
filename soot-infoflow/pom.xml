@@ -110,6 +110,11 @@
 			<version>1.2.3</version>
 		</dependency>
 		<dependency>
+			<groupId>com.example.pal</groupId>
+			<artifactId>callgraph</artifactId>
+			<version>${callgraph.version}</version>
+		</dependency>
+		<dependency>
 			<groupId>org.soot-oss</groupId>
 			<artifactId>soot</artifactId>
 			<version>${soot.version}</version>

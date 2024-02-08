@@ -10,8 +10,6 @@ import soot.jimple.InvokeExpr;
 import soot.jimple.StaticInvokeExpr;
 import soot.jimple.infoflow.InfoflowManager;
 import soot.jimple.toolkits.callgraph.VirtualEdgesSummaries;
-import soot.jimple.toolkits.callgraph.VirtualEdgesSummaries.AbstractParameterMapping;
-import soot.jimple.toolkits.callgraph.VirtualEdgesSummaries.DirectParameterMapping;
 import soot.jimple.toolkits.callgraph.VirtualEdgesSummaries.DirectTarget;
 import soot.jimple.toolkits.callgraph.VirtualEdgesSummaries.IndirectTarget;
 import soot.jimple.toolkits.callgraph.VirtualEdgesSummaries.VirtualEdge;
@@ -36,14 +34,14 @@ public class VirtualEdgeTargetCallerCalleeMapper implements ICallerCalleeArgumen
 		if (calleeParamIndex == BASE_OBJECT)
 			return virtualEdgeTarget.getArgIndex();
 		else {
-			for (AbstractParameterMapping i : directTarget.getParameterMappings()) {
-				if (i instanceof DirectParameterMapping) {
-					DirectParameterMapping dm = (DirectParameterMapping) i;
-					if (calleeParamIndex == dm.getTargetIndex())
-						return dm.getSourceIndex();
-				} else
-					throw new RuntimeException("Unsupported mapping type: " + i.getClass());
-			}
+//			for (AbstractParameterMapping i : directTarget.getParameterMappings()) {
+//				if (i instanceof DirectParameterMapping) {
+//					DirectParameterMapping dm = (DirectParameterMapping) i;
+//					if (calleeParamIndex == dm.getTargetIndex())
+//						return dm.getSourceIndex();
+//				} else
+//					throw new RuntimeException("Unsupported mapping type: " + i.getClass());
+//			}
 			return UNKNOWN;
 		}
 
@@ -55,14 +53,14 @@ public class VirtualEdgeTargetCallerCalleeMapper implements ICallerCalleeArgumen
 			//The base object of the caller is not relevant for virtual edges
 			return UNKNOWN;
 		else {
-			for (AbstractParameterMapping i : directTarget.getParameterMappings()) {
-				if (i instanceof DirectParameterMapping) {
-					DirectParameterMapping dm = (DirectParameterMapping) i;
-					if (callerParamIndex == dm.getSourceIndex())
-						return dm.getTargetIndex();
-				} else
-					throw new RuntimeException("Unsupported mapping type: " + i.getClass());
-			}
+//			for (AbstractParameterMapping i : directTarget.getParameterMappings()) {
+//				if (i instanceof DirectParameterMapping) {
+//					DirectParameterMapping dm = (DirectParameterMapping) i;
+//					if (callerParamIndex == dm.getSourceIndex())
+//						return dm.getTargetIndex();
+//				} else
+//					throw new RuntimeException("Unsupported mapping type: " + i.getClass());
+//			}
 			return UNKNOWN;
 		}
 	}

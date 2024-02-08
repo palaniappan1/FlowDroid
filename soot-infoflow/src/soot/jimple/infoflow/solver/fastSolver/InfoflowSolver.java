@@ -162,6 +162,12 @@ public class InfoflowSolver extends IFDSSolver<Unit, Abstraction, BiDiInterproce
 		return propagationCount;
 	}
 
+	public long getMethodsPropagatedCount(){
+		return methodsPropagatedCount;
+	}
+
+
+
 	@Override
 	public AbstractInfoflowProblem getTabulationProblem() {
 		return problem;

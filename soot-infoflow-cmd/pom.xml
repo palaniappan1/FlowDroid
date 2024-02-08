@@ -150,5 +150,15 @@
 			<version>${slf4j.version}</version>
             <optional>true</optional>
         </dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.14.0-rc1</version>
+		</dependency>
+		<dependency>
+			<groupId>com.example.pal</groupId>
+			<artifactId>callgraph</artifactId>
+			<version>${callgraph.version}</version>
+		</dependency>
 	</dependencies>
 </project>

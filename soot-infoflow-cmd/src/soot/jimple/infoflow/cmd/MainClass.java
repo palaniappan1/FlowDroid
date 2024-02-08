@@ -3,12 +3,9 @@ package soot.jimple.infoflow.cmd;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
+import config.CallGraphConfig;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -18,6 +15,7 @@ import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import soot.Scene;
 import soot.jimple.infoflow.InfoflowConfiguration.AliasingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.CallbackSourceMode;
 import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
@@ -29,10 +27,15 @@ import soot.jimple.infoflow.InfoflowConfiguration.LayoutMatchingMode;
 import soot.jimple.infoflow.InfoflowConfiguration.PathBuildingAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.PathReconstructionMode;
 import soot.jimple.infoflow.InfoflowConfiguration.StaticFieldTrackingMode;
+import soot.jimple.infoflow.android.EvaluationConfig;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration;
 import soot.jimple.infoflow.android.InfoflowAndroidConfiguration.CallbackAnalyzer;
 import soot.jimple.infoflow.android.SetupApplication;
 import soot.jimple.infoflow.android.config.XMLConfigurationParser;
+import soot.jimple.infoflow.android.util.AnalysisMetrics;
+import soot.jimple.infoflow.android.util.AppAnalysisResult;
+import soot.jimple.infoflow.android.util.CallGraphMetrics;
+import soot.jimple.infoflow.android.util.Metrics;
 import soot.jimple.infoflow.methodSummary.data.provider.LazySummaryProvider;
 import soot.jimple.infoflow.methodSummary.taintWrappers.ReportMissingSummaryWrapper;
 import soot.jimple.infoflow.methodSummary.taintWrappers.SummaryTaintWrapper;
@@ -42,10 +45,11 @@ import soot.jimple.infoflow.taintWrappers.ITaintPropagationWrapper;
 import soot.jimple.infoflow.taintWrappers.TaintWrapperSet;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
+import util.StopWatch;
 
 /**
  * Main class for running FlowDroid from the command-line
- * 
+ *
  * @author Steven Arzt
  *
  */
@@ -59,7 +63,14 @@ public class MainClass {
 
 	protected Set<String> filesToSkip = new HashSet<>();
 
+	protected static AppAnalysisResult appAnalysisResult;
+
+	protected static StopWatch stopWatch = null;
+
+	protected static CallGraphMetrics callGraphMetrics;
+
 	// Files
+	private static final String RESULT_JSON_FILE = "r_j";
 	private static final String OPTION_CONFIG_FILE = "c";
 	private static final String OPTION_APK_FILE = "a";
 	private static final String OPTION_PLATFORMS_DIR = "p";
@@ -73,6 +84,8 @@ public class MainClass {
 	private static final String OPTION_TIMEOUT = "dt";
 	private static final String OPTION_CALLBACK_TIMEOUT = "ct";
 	private static final String OPTION_RESULT_TIMEOUT = "rt";
+
+	private static final String QILIN_PTA = "qilin_pta";
 
 	// Optional features
 	private static final String OPTION_NO_STATIC_FLOWS = "ns";
@@ -130,7 +143,7 @@ public class MainClass {
 	private static final String OPTION_CALLGRAPH_FILE = "cf";
 	private static final String OPTION_CALLGRAPH_ONLY = "x";
 
-	protected MainClass() {
+	public MainClass() {
 		initializeCommandLineOptions();
 	}
 
@@ -139,6 +152,8 @@ public class MainClass {
 	 */
 	private void initializeCommandLineOptions() {
 		options.addOption("?", "help", false, "Print this help message");
+
+		options.addOption(RESULT_JSON_FILE, "json_result_file", true, "The ground truth result file");
 
 		// Files
 		options.addOption(OPTION_CONFIG_FILE, "configfile", true, "Use the given configuration file");
@@ -161,6 +176,7 @@ public class MainClass {
 
 		// Optional features
 		options.addOption(OPTION_NO_STATIC_FLOWS, "nostatic", false, "Do not track static data flows");
+		options.addOption(QILIN_PTA, "qilin_pta", true, "The QILIN_PTA algorithm to be used");
 		options.addOption(OPTION_NO_CALLBACK_ANALYSIS, "nocallbacks", false, "Do not analyze Android callbacks");
 		options.addOption(OPTION_NO_EXCEPTIONAL_FLOWS, "noexceptions", false,
 				"Do not track taints across exceptional control flow edges");
@@ -251,10 +267,53 @@ public class MainClass {
 		options.addOption(OPTION_CALLGRAPH_ONLY, "callgraphonly", false, "Only compute the callgraph and terminate");
 	}
 
-	public static void main(String[] args) throws Exception {
-		MainClass main = new MainClass();
-		main.run(args);
+    public static void startMetrics() {
+        stopWatch = StopWatch.newAndStart("Analysis Time");
+//        memoryWatcher = MemoryWatcher.getInstance("Analysis Memory");
+//        memoryWatcher.start();
+    }
+
+    public static void stopMetrics() {
+        stopWatch.stop();
+//        memoryWatcher.stop();
+    }
+
+    public static void main(String[] args) throws Exception {
+        appAnalysisResult = AppAnalysisResult.getInstance();
+        callGraphMetrics = CallGraphMetrics.getInstance();
+        MainClass main = new MainClass();
+        startMetrics();
+        main.run(args);
+        stopMetrics();
+        setMetrics(appAnalysisResult);
+    }
+
+	public Scene getSceneForAPK(CallGraphConfig callGraphConfig, String android_jars){
+		final InfoflowAndroidConfiguration config = new InfoflowAndroidConfiguration();
+		config.getAnalysisFileConfig().setTargetAPKFile(callGraphConfig.getAppPath());
+		config.getAnalysisFileConfig().setAndroidPlatformDir(android_jars);
+		analyzer = createFlowDroidInstance(config);
+		// Because we are not focusing on doing the taint Analysis
+		analyzer.setTaintWrapper(null);
+		return analyzer.runInfoFlowAndReturnScene(callGraphConfig);
 	}
+
+    public static void setMetrics(AppAnalysisResult appAnalysisResult) {
+        if (!callGraphMetrics.getCallGraphConstructionMetrics().isEmpty()) {
+            AnalysisMetrics analysisMetrics = AnalysisMetrics.getInstance();
+            analysisMetrics.setAnalysisTime(stopWatch.elapsed());
+            analysisMetrics.setMemoryConsumed(EvaluationConfig.getMemory_consumed());
+            Metrics metrics = Metrics.getInstance();
+            metrics.setCallGraphMetrics(callGraphMetrics);
+            metrics.setAnalysisMetrics(analysisMetrics);
+            appAnalysisResult.setMetrics(metrics);
+			appAnalysisResult.setNum_of_reachable_methods(EvaluationConfig.getNum_reachable_methods());
+			appAnalysisResult.setNum_of_methods_propagated(EvaluationConfig.getNum_methods_propagated());
+            Util.writeToCsv(appAnalysisResult, EvaluationConfig.getCSV_FILE_PATh());
+            System.out.println("Written to file");
+        }
+    }
+
 
 	protected void run(String[] args) throws Exception {
 		// We need proper parameters
@@ -355,7 +414,7 @@ public class MainClass {
 				analyzer.setTaintWrapper(taintWrapper);
 
 				// Start the data flow analysis
-				analyzer.runInfoflow();
+				analyzer.runInfoflow(callGraphMetrics);
 
 				if (reportMissingSummaryWrapper != null) {
 					String file = cmd.getOptionValue(OPTION_MISSING_SUMMARIES_FILE);
@@ -535,6 +594,8 @@ public class MainClass {
 			return CallgraphAlgorithm.SPARK;
 		else if (algo.equalsIgnoreCase("GEOM"))
 			return CallgraphAlgorithm.GEOM;
+		else if (algo.equalsIgnoreCase("QILIN"))
+			return CallgraphAlgorithm.QILIN;
 		else {
 			System.err.println(String.format("Invalid callgraph algorithm: %s", algo));
 			throw new AbortAnalysisException();
@@ -689,7 +750,7 @@ public class MainClass {
 	/**
 	 * Parses the given command-line options and fills the given configuration
 	 * object accordingly
-	 * 
+	 *
 	 * @param cmd    The command line to parse
 	 * @param config The configuration object to fill
 	 */
@@ -697,8 +758,23 @@ public class MainClass {
 		// Files
 		{
 			String apkFile = cmd.getOptionValue(OPTION_APK_FILE);
-			if (apkFile != null && !apkFile.isEmpty())
+			if (apkFile != null && !apkFile.isEmpty()) {
 				config.getAnalysisFileConfig().setTargetAPKFile(apkFile);
+				String[] parts = apkFile.split("/");
+				EvaluationConfig.setCurrentlyProcessingApkName(parts[parts.length - 1]);
+				appAnalysisResult.setAPP_NAME(EvaluationConfig.getCurrentlyProcessingApkName());
+			}
+		}
+		{
+			String result_Json_File = cmd.getOptionValue(RESULT_JSON_FILE);
+			if (result_Json_File != null) {
+				EvaluationConfig.set_RESULT_JSON_FILE(result_Json_File);
+			}
+		}
+		{
+			if (cmd.hasOption(QILIN_PTA)) {
+				config.setQILIN_PTA(cmd.getOptionValue(QILIN_PTA));
+			}
 		}
 		{
 			String platformsDir = cmd.getOptionValue(OPTION_PLATFORMS_DIR);
@@ -713,7 +789,8 @@ public class MainClass {
 		{
 			String outputFile = cmd.getOptionValue(OPTION_OUTPUT_FILE);
 			if (outputFile != null && !outputFile.isEmpty())
-				config.getAnalysisFileConfig().setOutputFile(outputFile);
+//				config.getAnalysisFileConfig().setOutputFile(outputFile);
+				EvaluationConfig.set_output_directory_path(outputFile);
 		}
 		{
 			String additionalClasspath = cmd.getOptionValue(OPTION_ADDITIONAL_CLASSPATH);
@@ -810,8 +887,15 @@ public class MainClass {
 		// Modes and algorithms
 		{
 			String cgalgo = cmd.getOptionValue(OPTION_CALLGRAPH_ALGO);
-			if (cgalgo != null && !cgalgo.isEmpty())
-				config.setCallgraphAlgorithm(parseCallgraphAlgorithm(cgalgo));
+			if (cgalgo != null && !cgalgo.isEmpty()) {
+				CallgraphAlgorithm callgraphAlgorithm = parseCallgraphAlgorithm(cgalgo);
+				config.setCallgraphAlgorithm(callgraphAlgorithm);
+				if (callgraphAlgorithm == CallgraphAlgorithm.QILIN) {
+					appAnalysisResult.setCg_name(cmd.getOptionValue(QILIN_PTA));
+				} else {
+					appAnalysisResult.setCg_name(cgalgo);
+				}
+			}
 		}
 		{
 			String layoutMode = cmd.getOptionValue(OPTION_LAYOUT_MODE);
