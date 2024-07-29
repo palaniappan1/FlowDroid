@@ -1,0 +1,26 @@
+[
+  {
+    "first": "$r5 \u003d virtualinvoke $r2.\u003candroid.content.Intent: java.lang.String getStringExtra(java.lang.String)\u003e(\"android.intent.extra.PHONE_NUMBER\")",
+    "second": "virtualinvoke r4.\u003cjava.io.OutputStreamWriter: void write(java.lang.String)\u003e($r1)"
+  },
+  {
+    "first": "$r5 \u003d virtualinvoke $r2.\u003candroid.content.Intent: java.lang.String getStringExtra(java.lang.String)\u003e(\"android.intent.extra.PHONE_NUMBER\")",
+    "second": "virtualinvoke r4.\u003cjava.io.OutputStreamWriter: void write(java.lang.String)\u003e($r1)"
+  },
+  {
+    "first": "$r5 \u003d virtualinvoke $r2.\u003candroid.content.Intent: java.lang.String getStringExtra(java.lang.String)\u003e(\"android.intent.extra.PHONE_NUMBER\")",
+    "second": "virtualinvoke r4.\u003cjava.io.OutputStreamWriter: void write(java.lang.String)\u003e($r1)"
+  },
+  {
+    "first": "$r11 \u003d virtualinvoke $r2.\u003candroid.content.Intent: java.lang.String getStringExtra(java.lang.String)\u003e(\"android.intent.extra.PHONE_NUMBER\")",
+    "second": "virtualinvoke r4.\u003cjava.io.OutputStreamWriter: void write(java.lang.String)\u003e($r1)"
+  },
+  {
+    "first": "$r14 \u003d virtualinvoke $r2.\u003candroid.content.Intent: java.lang.String getStringExtra(java.lang.String)\u003e(\"incoming_number\")",
+    "second": "virtualinvoke r4.\u003cjava.io.OutputStreamWriter: void write(java.lang.String)\u003e($r1)"
+  },
+  {
+    "first": "$r9 \u003d virtualinvoke r4.\u003candroid.telephony.TelephonyManager: java.lang.String getSimCountryIso()\u003e()",
+    "second": "virtualinvoke r3.\u003cjava.io.OutputStreamWriter: void write(java.lang.String)\u003e($r2)"
+  }
+]

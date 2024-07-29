@@ -11,7 +11,9 @@
 package soot.jimple.infoflow.android;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.sql.Time;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -635,7 +637,11 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		// Construct the actual callgraph
 		logger.info("Constructing the callgraph...");
+		Stopwatch stopwatch = Stopwatch.createStarted();
 //		PackManager.v().getPack("cg").apply();
+//		CallGraphConstructionMetrics callGraphConstructionMetrics = new CallGraphConstructionMetrics(configureCallgraph().toString(), stopwatch.elapsed(TimeUnit.SECONDS), Scene.v().getCallGraph().size());
+//		this.callGraphMetrics.setCallGraphConstructionMetrics(callGraphConstructionMetrics);
+//		EvaluationConfig.setNum_reachable_methods(Scene.v().getReachableMethods().size());
 		if(callGraphConfig == null) {
 			callGraphConfig = CallGraphConfig.getInstance();
 			CallGraphAlgorithm callGraphAlgorithm = configureCallgraph();
@@ -648,6 +654,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		try {
 			CallGraphMetricsWrapper callGraphMetrics = CallGraphApplication.generateCallGraph(Scene.v(), callGraphConfig);
 			Scene.v().setCallGraph(callGraphMetrics.getCallGraph());
+			writeToFile(callGraphMetrics.getCallGraph().toString());
 			if(this.callGraphMetrics != null) {
 				this.callGraphMetrics.setCallGraphConstructionMetrics(callGraphMetrics.getCallGraphConstructionMetrics());
 			}
@@ -668,6 +675,18 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		// Make sure that we have a hierarchy
 		Scene.v().getOrMakeFastHierarchy();
+	}
+
+	public void writeToFile(String callGraph){
+		String fileName = config.getQILIN_PTA() + ".txt";
+		try {
+			FileWriter writer = new FileWriter(fileName, true); // Set true for append mode
+			writer.write(callGraph);
+			writer.close();
+		} catch (IOException e) {
+			System.out.println("Some Error occured when writing to a file");
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -1237,7 +1256,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		Options.v().set_soot_classpath(getClasspath());
 		Main.v().autoSetOptions();
-//		configureCallgraph();
+		configureCallgraph();
 
 		// Load whatever we need
 		logger.info("Loading dex files...");
@@ -1270,27 +1289,27 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 			case AutomaticSelection:
 			case SPARK:
 				callGraphAlgorithm = CallGraphAlgorithm.SPARK;
-//			Options.v().setPhaseOption("cg.spark", "on");
+			Options.v().setPhaseOption("cg.spark", "on");
 				break;
 			case GEOM:
 				callGraphAlgorithm = CallGraphAlgorithm.GEOM;
-//			Options.v().setPhaseOption("cg.spark", "on");
-//			AbstractInfoflow.setGeomPtaSpecificOptions();
+			Options.v().setPhaseOption("cg.spark", "on");
+			AbstractInfoflow.setGeomPtaSpecificOptions();
 				break;
 			case CHA:
 				callGraphAlgorithm = CallGraphAlgorithm.CHA;
-//			Options.v().setPhaseOption("cg.cha", "on");
+			Options.v().setPhaseOption("cg.cha", "on");
 				break;
 			case RTA:
 				callGraphAlgorithm = CallGraphAlgorithm.RTA;
-//			Options.v().setPhaseOption("cg.spark", "on");
-//			Options.v().setPhaseOption("cg.spark", "rta:true");
-//			Options.v().setPhaseOption("cg.spark", "on-fly-cg:false");
+			Options.v().setPhaseOption("cg.spark", "on");
+			Options.v().setPhaseOption("cg.spark", "rta:true");
+			Options.v().setPhaseOption("cg.spark", "on-fly-cg:false");
 				break;
 			case VTA:
 				callGraphAlgorithm = CallGraphAlgorithm.VTA;
-//			Options.v().setPhaseOption("cg.spark", "on");
-//			Options.v().setPhaseOption("cg.spark", "vta:true");
+			Options.v().setPhaseOption("cg.spark", "on");
+			Options.v().setPhaseOption("cg.spark", "vta:true");
 				break;
 			default:
 				throw new RuntimeException("Invalid callgraph algorithm");
@@ -1683,6 +1702,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 		// Print out the found results
 		{
 			int resCount = resultAggregator.getLastResults() == null ? 0 : resultAggregator.getLastResults().size();
+			this.callGraphMetrics.setNumberOfLeaks(resCount);
 			if (config.getOneComponentAtATime())
 				logger.info("Found {} leaks for component {}", resCount, entrypoint);
 			else
@@ -1700,6 +1720,8 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 				perfData.setTotalRuntimeSeconds((int) Math.round((System.nanoTime() - beforeEntryPoint) / 1E9));
 				EvaluationConfig.setMemory_consumed(perfData.getMaxMemoryConsumption());
 				EvaluationConfig.setNum_methods_propagated(perfData.getMethodPropagationCount());
+				EvaluationConfig.setNum_edges_propagated(perfData.getEdgePropagationCount());
+				EvaluationConfig.setSourceSinkMap(perfData.getSourceSinkMap());
 			}
 		}
 

@@ -12,6 +12,8 @@ public class AppAnalysisResult {
 
     private long num_of_methods_propagated;
 
+    private long num_edges_propagated;
+
     public static AppAnalysisResult getInstance(){
         return new AppAnalysisResult();
     }
@@ -58,5 +60,13 @@ public class AppAnalysisResult {
 
     public void setNum_of_methods_propagated(long num_of_methods_propagated) {
         this.num_of_methods_propagated = num_of_methods_propagated;
+    }
+
+    public long getNum_edges_propagated() {
+        return num_edges_propagated;
+    }
+
+    public void setNum_edges_propagated(long num_edges_propagated) {
+        this.num_edges_propagated = num_edges_propagated;
     }
 }

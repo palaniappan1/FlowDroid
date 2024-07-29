@@ -2,31 +2,48 @@ package soot.jimple.infoflow.cmd;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import metrics.CallGraphConstructionMetrics;
+import qilin.util.Pair;
+import soot.jimple.infoflow.android.EvaluationConfig;
 import soot.jimple.infoflow.android.util.AnalysisMetrics;
 import soot.jimple.infoflow.android.util.AppAnalysisResult;
 import soot.jimple.infoflow.android.util.CallGraphMetrics;
 import soot.jimple.infoflow.android.util.Metrics;
 
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 import static soot.jimple.infoflow.android.EvaluationConfig.*;
 
 public class Util {
+
+    public static int expectedFlow = 0;
+
+    public static int unExpectedFlow = 0;
     public static void writeToCsv(AppAnalysisResult appAnalysisResult, String csv_file_path){
+        checkForGroundTruth();
+        writeJsonResult();
         int getGroundTruthLeaks = getGroundTruthLeaks(appAnalysisResult.getAPP_NAME() + ".apk");
         String app_name = appAnalysisResult.getAPP_NAME();
         String cg_name = appAnalysisResult.getCg_name();
         Metrics metrics = appAnalysisResult.getMetrics();
         int numOfReachableMethods = appAnalysisResult.getNum_of_reachable_methods();
         long numOfMethodsPropagated = appAnalysisResult.getNum_of_methods_propagated();
+        long numOfEdgesPropagated = appAnalysisResult.getNum_edges_propagated();
         CallGraphMetrics callGraphMetrics = metrics.getCallGraphMetrics();
         int no_of_leaks = callGraphMetrics.getNumberOfLeaks();
         float cg_construction_time_sum = 0;
@@ -47,8 +64,11 @@ public class Util {
         record.put("cg_name", cg_name);
         record.put("reachable_methods", numOfReachableMethods);
         record.put("num_of_methods_propagated", numOfMethodsPropagated);
+        record.put("num_edges_propagated", numOfEdgesPropagated);
         record.put("analysis_time", formatDecimalValues(analysisMetrics.getAnalysisTime()));
         record.put("analysis_memory", formatDecimalValues(analysisMetrics.getMemoryConsumed()));
+        record.put("expected_leaks", expectedFlow);
+        record.put("unexpected_leaks", unExpectedFlow);
         Path path = Paths.get(csv_file_path);
         if(Files.exists(path)){
             try {
@@ -76,6 +96,79 @@ public class Util {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+    }
+
+    private static void writeJsonResult() {
+        Pair[] pairsArray = getSourceSinkList().toArray(new Pair[0]);
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        String json = gson.toJson(pairsArray);
+
+        // Write JSON string to file
+        try (FileWriter writer = new FileWriter("output.json")) {
+            writer.write(json);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void checkForGroundTruth(){
+        JsonObject json;
+        try {
+            JsonParser parser = new JsonParser();
+            json = parser.parse(new FileReader(getGroundTruthSourceSinkFile())).getAsJsonObject();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        // Parse the JSON into expected and unexpected flows
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        ExpectedFlow[] expectedFlows = gson.fromJson(json.getAsJsonArray("expected"), ExpectedFlow[].class);
+        ExpectedFlow[] unExpectedFlows = gson.fromJson(json.getAsJsonArray("unExpected"), ExpectedFlow[].class);
+
+        ArrayList<Pair<String, String>> sourceSinkList = EvaluationConfig.getSourceSinkList();
+        int number_of_iterations = 0;
+
+        for (Pair<String, String> entry : sourceSinkList) {
+            // Iterate through the expected flows
+            number_of_iterations++;
+            String source = entry.getFirst().replace("$", "");
+            String sink = entry.getSecond().replace("$", "");
+            for (ExpectedFlow flow : expectedFlows) {
+                String flowSource = flow.getSource().replace("$", "");
+                String flowSink = flow.getSink().replace("$", "");
+                if (source.equals(flowSource) && sink.equals(flowSink)) {
+                    expectedFlow++;
+                    break;
+                }
+            }
+            for(ExpectedFlow flow : unExpectedFlows){
+                String flowSource = flow.getSource().replace("$", "");
+                String flowSink = flow.getSink().replace("$", "");
+                if (source.equals(flowSource) && sink.equals(flowSink)) {
+                    unExpectedFlow++;
+                    break;
+                }
+            }
+        }
+
+        System.out.println("Expected Flows: " + expectedFlow);
+        System.out.println("Unexpected Flows: " + unExpectedFlow);
+    }
+
+
+
+    static class ExpectedFlow {
+        private String source;
+        private String sink;
+
+        public String getSource() {
+            return source;
+        }
+
+        public String getSink() {
+            return sink;
         }
     }
 

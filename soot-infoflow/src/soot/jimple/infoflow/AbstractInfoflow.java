@@ -1201,6 +1201,7 @@ public abstract class AbstractInfoflow implements IInfoflow {
 						iCfg.getMethodOf(sink.getStmt()).getSignature());
 				for (ResultSourceInfo source : results.getResults().get(sink)) {
 					logger.info("- {} in method {}", source, iCfg.getMethodOf(source.getStmt()).getSignature());
+					performanceData.addSourceSink(source.getStmt().toString(), sink.getStmt().toString());
 					if (source.getPath() != null) {
 						logger.info("\ton Path: ");
 						for (Unit p : source.getPath()) {

@@ -1,5 +1,9 @@
 package soot.jimple.infoflow.results;
 
+
+import qilin.util.Pair;
+
+import java.util.ArrayList;
 import java.util.Objects;
 
 /**
@@ -24,6 +28,8 @@ public class InfoflowPerformanceData {
 
 	private long infoflowPropagationCount = -1;
 	private long aliasPropagationCount = -1;
+
+	private ArrayList<Pair<String, String>> sourceSinkMap = new ArrayList<>();
 
 	public InfoflowPerformanceData() {
 		//
@@ -364,5 +370,13 @@ public class InfoflowPerformanceData {
 
 	public void setMethodPropagationCount(long methodPropagationCount) {
 		this.methodPropagationCount = methodPropagationCount;
+	}
+
+	public ArrayList<Pair<String, String>> getSourceSinkMap() {
+		return sourceSinkMap;
+	}
+
+	public void addSourceSink(String source, String sink) {
+		this.sourceSinkMap.add(new Pair<>(source, sink));
 	}
 }

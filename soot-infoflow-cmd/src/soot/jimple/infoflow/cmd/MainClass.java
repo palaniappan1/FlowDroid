@@ -1,10 +1,17 @@
 package soot.jimple.infoflow.cmd;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Stopwatch;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import config.CallGraphConfig;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -67,10 +74,18 @@ public class MainClass {
 
 	protected static StopWatch stopWatch = null;
 
+	static Stopwatch analysisStopWatch = null;
+
+	protected static Timer timer = new Timer();
+
 	protected static CallGraphMetrics callGraphMetrics;
 
 	// Files
 	private static final String RESULT_JSON_FILE = "r_j";
+
+	private static final JsonArray dummy_json_array = new JsonArray();
+
+	private static final String RESULT_SOURCE_SINK_FILE = "r_s_s";
 	private static final String OPTION_CONFIG_FILE = "c";
 	private static final String OPTION_APK_FILE = "a";
 	private static final String OPTION_PLATFORMS_DIR = "p";
@@ -154,6 +169,7 @@ public class MainClass {
 		options.addOption("?", "help", false, "Print this help message");
 
 		options.addOption(RESULT_JSON_FILE, "json_result_file", true, "The ground truth result file");
+		options.addOption(RESULT_SOURCE_SINK_FILE, "json_source_sink_file", true, "The ground truth file that contains the expected source and sink");
 
 		// Files
 		options.addOption(OPTION_CONFIG_FILE, "configfile", true, "Use the given configuration file");
@@ -269,12 +285,32 @@ public class MainClass {
 
     public static void startMetrics() {
         stopWatch = StopWatch.newAndStart("Analysis Time");
+		analysisStopWatch = Stopwatch.createStarted();
+		startListening();
 //        memoryWatcher = MemoryWatcher.getInstance("Analysis Memory");
 //        memoryWatcher.start();
     }
 
+	public static void startListening(){
+		final long threshold = 4 * 60 * 60 * 1000 + 59 * 60 * 1000; // 4 hours and 59 minutes
+//		final long threshold = 3 * 60 * 1000; // 5 minutes for testing
+		timer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				if (analysisStopWatch.elapsed(TimeUnit.MILLISECONDS) >= threshold) {
+					// Perform the action when the threshold is reached
+					stopMetrics();
+					setMetrics(appAnalysisResult);
+					// Optionally, cancel the timer to stop listening
+					timer.cancel();
+				}
+			}
+		}, 0, 60 * 1000); // Check every 1 minute (60 seconds * 1000 milliseconds)
+	}
+
     public static void stopMetrics() {
         stopWatch.stop();
+		timer.cancel();
 //        memoryWatcher.stop();
     }
 
@@ -283,9 +319,16 @@ public class MainClass {
         callGraphMetrics = CallGraphMetrics.getInstance();
         MainClass main = new MainClass();
         startMetrics();
+		try{
         main.run(args);
-        stopMetrics();
-        setMetrics(appAnalysisResult);
+		}
+		catch (Exception exception){
+			exception.printStackTrace();
+		}
+		finally{
+			stopMetrics();
+			setMetrics(appAnalysisResult);
+		}
     }
 
 	public Scene getSceneForAPK(CallGraphConfig callGraphConfig, String android_jars){
@@ -309,8 +352,9 @@ public class MainClass {
             appAnalysisResult.setMetrics(metrics);
 			appAnalysisResult.setNum_of_reachable_methods(EvaluationConfig.getNum_reachable_methods());
 			appAnalysisResult.setNum_of_methods_propagated(EvaluationConfig.getNum_methods_propagated());
+			appAnalysisResult.setNum_edges_propagated(EvaluationConfig.getNum_edges_propagated());
             Util.writeToCsv(appAnalysisResult, EvaluationConfig.getCSV_FILE_PATh());
-            System.out.println("Written to file");
+//            System.out.println("Written to file");
         }
     }
 
@@ -769,6 +813,12 @@ public class MainClass {
 			String result_Json_File = cmd.getOptionValue(RESULT_JSON_FILE);
 			if (result_Json_File != null) {
 				EvaluationConfig.set_RESULT_JSON_FILE(result_Json_File);
+			}
+		}
+		{
+			String result_source_sink_File = cmd.getOptionValue(RESULT_SOURCE_SINK_FILE);
+			if (result_source_sink_File != null) {
+				EvaluationConfig.setGroundTruthSourceSinkFile(result_source_sink_File);
 			}
 		}
 		{
