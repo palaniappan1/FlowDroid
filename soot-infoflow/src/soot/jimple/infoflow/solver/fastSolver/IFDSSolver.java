@@ -120,6 +120,9 @@ public class IFDSSolver<N, D extends FastSolverLinkedNode<D, N>, I extends BiDiI
 	@DontSynchronize("benign races")
 	public long methodsPropagatedCount;
 
+	@DontSynchronize("benign races")
+	public long numberOfStatementsPropagated;
+
 	@DontSynchronize("stateless")
 	protected final D zeroValue;
 
@@ -306,9 +309,7 @@ public class IFDSSolver<N, D extends FastSolverLinkedNode<D, N>, I extends BiDiI
 
 		// for each possible callee
 		Collection<SootMethod> callees = icfg.getCalleesOfCallAt(n);
-		if(callees != null) {
-			methodsPropagatedCount += callees.size();
-		}
+
 		if (callees != null && !callees.isEmpty()) {
 			if (maxCalleesPerCallSite < 0 || callees.size() <= maxCalleesPerCallSite) {
 				callees.forEach(new Consumer<SootMethod>() {
@@ -318,7 +319,9 @@ public class IFDSSolver<N, D extends FastSolverLinkedNode<D, N>, I extends BiDiI
 						// Concrete and early termination check
 						if (!sCalledProcN.isConcrete() || killFlag != null)
 							return;
-
+						if(sCalledProcN.hasActiveBody()) {
+							numberOfStatementsPropagated += sCalledProcN.getActiveBody().getUnits().size();
+						}
 						// compute the call-flow function
 						FlowFunction<D> function = flowFunctions.getCallFlowFunction(n, sCalledProcN);
 						Set<D> res = computeCallFlowFunction(function, d1, d2);

@@ -1,6 +1,7 @@
 package soot.jimple.infoflow.results;
 
 
+
 import qilin.util.Pair;
 
 import java.util.ArrayList;
@@ -22,6 +23,8 @@ public class InfoflowPerformanceData {
 	private long edgePropagationCount = -1;
 
 	private long methodPropagationCount = -1;
+
+	private long numberOfStatementsPropagated = -1;
 
 	private int sourceCount = -1;
 	private int sinkCount = -1;
@@ -368,8 +371,16 @@ public class InfoflowPerformanceData {
 		return methodPropagationCount;
 	}
 
+	public long getNumberOfStatementsPropagated(){
+		return numberOfStatementsPropagated;
+	}
+
 	public void setMethodPropagationCount(long methodPropagationCount) {
 		this.methodPropagationCount = methodPropagationCount;
+	}
+
+	public void setNumberOfStatementsPropagated(long numberOfStatementsPropagated) {
+		this.numberOfStatementsPropagated = numberOfStatementsPropagated;
 	}
 
 	public ArrayList<Pair<String, String>> getSourceSinkMap() {

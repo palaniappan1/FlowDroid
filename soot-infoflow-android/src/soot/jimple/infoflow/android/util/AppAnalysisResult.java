@@ -14,6 +14,8 @@ public class AppAnalysisResult {
 
     private long num_edges_propagated;
 
+    private long num_statements_propagated;
+
     public static AppAnalysisResult getInstance(){
         return new AppAnalysisResult();
     }
@@ -68,5 +70,13 @@ public class AppAnalysisResult {
 
     public void setNum_edges_propagated(long num_edges_propagated) {
         this.num_edges_propagated = num_edges_propagated;
+    }
+
+    public long getNum_statements_propagated() {
+        return num_statements_propagated;
+    }
+
+    public void setNum_statements_propagated(long num_statements_propagated) {
+        this.num_statements_propagated = num_statements_propagated;
     }
 }

@@ -845,6 +845,7 @@ public abstract class AbstractInfoflow implements IInfoflow {
 					timeoutWatcher.addSolver((IMemoryBoundedSolver) additionalSolver);
 				if (additionalAliasSolver != null)
 					timeoutWatcher.addSolver((IMemoryBoundedSolver) additionalAliasSolver);
+                logger.info("Dataflow analysis starts with {}", config.getDataFlowTimeout());
 				timeoutWatcher.start();
 			}
 
@@ -962,6 +963,7 @@ public abstract class AbstractInfoflow implements IInfoflow {
 				performanceData.addTaintPropagationSeconds(taintPropagationSeconds);
 				performanceData.addEdgePropagationCount(forwardSolver.getPropagationCount());
 				performanceData.setMethodPropagationCount(forwardSolver.getMethodsPropagatedCount());
+				performanceData.setNumberOfStatementsPropagated(forwardSolver.getStatementsPropagatedCount());
 				if (backwardSolver != null)
 					performanceData.addEdgePropagationCount(backwardSolver.getPropagationCount());
 

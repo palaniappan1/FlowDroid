@@ -101,6 +101,8 @@ public interface IInfoflowSolver {
 
 	public long getMethodsPropagatedCount();
 
+	public long getStatementsPropagatedCount();
+
 	/**
 	 * Solves the data flow problem
 	 */

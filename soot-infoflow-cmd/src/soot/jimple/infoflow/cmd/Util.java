@@ -23,9 +23,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.DecimalFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 
 import static soot.jimple.infoflow.android.EvaluationConfig.*;
 
@@ -36,7 +36,7 @@ public class Util {
     public static int unExpectedFlow = 0;
     public static void writeToCsv(AppAnalysisResult appAnalysisResult, String csv_file_path){
         checkForGroundTruth();
-        writeJsonResult();
+//        writeJsonResult();
         int getGroundTruthLeaks = getGroundTruthLeaks(appAnalysisResult.getAPP_NAME() + ".apk");
         String app_name = appAnalysisResult.getAPP_NAME();
         String cg_name = appAnalysisResult.getCg_name();
@@ -44,6 +44,7 @@ public class Util {
         int numOfReachableMethods = appAnalysisResult.getNum_of_reachable_methods();
         long numOfMethodsPropagated = appAnalysisResult.getNum_of_methods_propagated();
         long numOfEdgesPropagated = appAnalysisResult.getNum_edges_propagated();
+        long numOfStatementsPropagated = appAnalysisResult.getNum_statements_propagated();
         CallGraphMetrics callGraphMetrics = metrics.getCallGraphMetrics();
         int no_of_leaks = callGraphMetrics.getNumberOfLeaks();
         float cg_construction_time_sum = 0;
@@ -63,10 +64,20 @@ public class Util {
         record.put("app_name", app_name);
         record.put("cg_name", cg_name);
         record.put("reachable_methods", numOfReachableMethods);
+        record.put("stmts_propagated", numOfStatementsPropagated);
         record.put("num_of_methods_propagated", numOfMethodsPropagated);
         record.put("num_edges_propagated", numOfEdgesPropagated);
         record.put("analysis_time", formatDecimalValues(analysisMetrics.getAnalysisTime()));
         record.put("analysis_memory", formatDecimalValues(analysisMetrics.getMemoryConsumed()));
+//        if (appAnalysisResult.getAPP_NAME().contains("fakebank_android_samp") && !isSootAlgorithm(cg_name)) {
+//            expectedFlow = 3;
+//        }
+//        if(appAnalysisResult.getAPP_NAME().contains("vibleaker_android") && isSootAlgorithm(cg_name)){
+//            expectedFlow = 1;
+//        }
+//        else if(appAnalysisResult.getAPP_NAME().contains("vibleaker_android") && !isSootAlgorithm(cg_name)){
+//            expectedFlow = 2;
+//        }
         record.put("expected_leaks", expectedFlow);
         record.put("unexpected_leaks", unExpectedFlow);
         Path path = Paths.get(csv_file_path);
@@ -112,7 +123,17 @@ public class Util {
         }
     }
 
+    private static boolean isSootAlgorithm(String cg_name){
+        return cg_name.equals("CHA") ||
+                cg_name.equals("RTA") ||
+                cg_name.equals("VTA") ||
+                cg_name.equals("SPARK");
+    }
+
     public static void checkForGroundTruth(){
+        if(getGroundTruthSourceSinkFile() == null){
+            return;
+        }
         JsonObject json;
         try {
             JsonParser parser = new JsonParser();
@@ -121,7 +142,6 @@ public class Util {
             e.printStackTrace();
             return;
         }
-
         // Parse the JSON into expected and unexpected flows
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         ExpectedFlow[] expectedFlows = gson.fromJson(json.getAsJsonArray("expected"), ExpectedFlow[].class);
@@ -172,9 +192,14 @@ public class Util {
         }
     }
 
-    private static String formatDecimalValues(double value) {
+    private static Double formatDecimalValues(double value) {
         DecimalFormat decimalFormat = new DecimalFormat("#.##");
-        return decimalFormat.format(value);
+        String formattedString = decimalFormat.format(value);
+        try {
+            return decimalFormat.parse(formattedString).doubleValue();
+        } catch (ParseException e) {
+            return Double.NaN;
+        }
     }
 
     public static int getGroundTruthLeaks(String apk_name){

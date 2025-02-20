@@ -153,6 +153,11 @@ public class InfoflowSolver extends FlowInsensitiveSolver<Unit, Abstraction, BiD
 	}
 
 	@Override
+	public long getStatementsPropagatedCount() {
+		return 0;
+	}
+
+	@Override
 	public void setSolverId(boolean solverId) {
 		super.setSolverId(solverId);
 	}

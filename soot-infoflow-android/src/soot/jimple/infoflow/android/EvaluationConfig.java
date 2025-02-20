@@ -23,6 +23,8 @@ public class EvaluationConfig {
 
     private static long num_methods_propagated;
 
+    private static long num_statements_propagated;
+
     private static long num_edges_propagated;
 
     private static String CURRENTLY_PROCESSING_APK_NAME = "";
@@ -76,6 +78,14 @@ public class EvaluationConfig {
 
     public static long getNum_methods_propagated() {
         return num_methods_propagated;
+    }
+
+    public static long getNum_statements_propagated(){
+        return num_statements_propagated;
+    }
+
+    public static void setNum_statements_propagated(long num_statements_propagated) {
+        EvaluationConfig.num_statements_propagated = num_statements_propagated;
     }
 
     public static void setNum_methods_propagated(long num_methods_propagated) {

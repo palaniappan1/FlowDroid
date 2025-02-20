@@ -286,13 +286,13 @@ public class MainClass {
     public static void startMetrics() {
         stopWatch = StopWatch.newAndStart("Analysis Time");
 		analysisStopWatch = Stopwatch.createStarted();
-		startListening();
+//		startListening();
 //        memoryWatcher = MemoryWatcher.getInstance("Analysis Memory");
 //        memoryWatcher.start();
     }
 
 	public static void startListening(){
-		final long threshold = 4 * 60 * 60 * 1000 + 59 * 60 * 1000; // 4 hours and 59 minutes
+		final long threshold = 6 * 60 * 60 * 1000 + 59 * 60 * 1000; // 6 hours and 59 minutes
 //		final long threshold = 3 * 60 * 1000; // 5 minutes for testing
 		timer.schedule(new TimerTask() {
 			@Override
@@ -353,6 +353,7 @@ public class MainClass {
 			appAnalysisResult.setNum_of_reachable_methods(EvaluationConfig.getNum_reachable_methods());
 			appAnalysisResult.setNum_of_methods_propagated(EvaluationConfig.getNum_methods_propagated());
 			appAnalysisResult.setNum_edges_propagated(EvaluationConfig.getNum_edges_propagated());
+			appAnalysisResult.setNum_statements_propagated(EvaluationConfig.getNum_statements_propagated());
             Util.writeToCsv(appAnalysisResult, EvaluationConfig.getCSV_FILE_PATh());
 //            System.out.println("Written to file");
         }

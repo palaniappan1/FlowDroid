@@ -9,7 +9,7 @@ public class CallGraphMetrics {
 
     private static CallGraphMetrics instance;
 
-    private static int numberOfLeaks;
+    private static int numberOfLeaks = -1;
 
     public static CallGraphMetrics getInstance(){
         instance = new CallGraphMetrics();

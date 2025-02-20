@@ -632,8 +632,8 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 
 		// If we didn't create the Soot instance, we can't be sure what its callgraph
 		// configuration is
-//		if (config.getSootIntegrationMode() == SootIntegrationMode.UseExistingInstance)
-//			configureCallgraph();
+		if (config.getSootIntegrationMode() == SootIntegrationMode.UseExistingInstance)
+			configureCallgraph();
 
 		// Construct the actual callgraph
 		logger.info("Constructing the callgraph...");
@@ -1720,6 +1720,7 @@ public class SetupApplication implements ITaintWrapperDataFlowAnalysis {
 				perfData.setTotalRuntimeSeconds((int) Math.round((System.nanoTime() - beforeEntryPoint) / 1E9));
 				EvaluationConfig.setMemory_consumed(perfData.getMaxMemoryConsumption());
 				EvaluationConfig.setNum_methods_propagated(perfData.getMethodPropagationCount());
+				EvaluationConfig.setNum_statements_propagated(perfData.getNumberOfStatementsPropagated());
 				EvaluationConfig.setNum_edges_propagated(perfData.getEdgePropagationCount());
 				EvaluationConfig.setSourceSinkMap(perfData.getSourceSinkMap());
 			}
